@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -90,9 +89,13 @@ def test_fail_severity_mismatch_fails_report() -> None:
 
 def test_warn_only_mismatch_yields_warning_not_failure() -> None:
     spec = p12_spec()
-    row_rule = replace(spec.reconciliation.rules[1], severity="warn")
+    row_rule = spec.reconciliation.rules[1].model_copy(update={"severity": "warn"})
     spec = spec.model_copy(
-        update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [spec.reconciliation.rules[0], row_rule]})}
+        update={
+            "reconciliation": spec.reconciliation.model_copy(
+                update={"rules": [spec.reconciliation.rules[0], row_rule]}
+            )
+        }
     )
     provider = FakeProvider()
     provider.rows["silver.orders"] = 3
