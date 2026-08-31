@@ -10,11 +10,12 @@ This repository is an installable reusable library, not a Databricks platform de
 ├── tests/                      deterministic package tests
 ├── examples/                   metadata/package usage examples only
 ├── templates/                  extension-package starter templates
-├── sql/                        reusable SQL assets
-├── scripts/                    package development utilities
+├── scripts/                    real package development/CI utilities
 ├── project/                    machine-readable capabilities + layout
 └── docs/                       human-readable architecture/ADRs/runbooks
 ```
+
+Directories are not used as a roadmap. If there is no executable SQL asset, recovery implementation, or extension namespace today, the repository does not keep an empty/reserved directory for it.
 
 Customer fixtures, expected certification outputs, Terraform, workspace IDs, Bundle environment targets, and organisation credentials do not belong here.
 
