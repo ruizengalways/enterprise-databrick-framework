@@ -59,18 +59,31 @@ class PatternRegistry:
             provider.validate(spec)
         return definition
 
-    def build_extension_runtime(self, spec: TableSpec, context: RuntimeContext) -> None:
-        """Register runtime behavior for an extension pattern.
+    def build_runtime(self, spec: TableSpec, context: RuntimeContext) -> None:
+        """Validate and register either a built-in or extension runtime.
 
-        Built-in P01-P14 execution is owned by core Databricks runtime modules. This method
-        is intentionally extension-only so a company package can add a new pattern without
-        patching the core routing tree.
+        This is the normal runtime entrypoint for consuming workloads. Built-in P01-P14
+        definitions remain in core; external pattern providers continue to own their own
+        executable runtime through the `edp.patterns` entry-point contract.
         """
+
+        self.validate(spec)
+        provider = self._provider_by_pattern.get(spec.pattern_id)
+        if provider is not None:
+            provider.build_runtime(spec, context)
+            return
+
+        from edp_framework.runtime.builtin import build_builtin_runtime
+
+        build_builtin_runtime(spec, context)
+
+    def build_extension_runtime(self, spec: TableSpec, context: RuntimeContext) -> None:
+        """Backward-compatible extension-only runtime entrypoint."""
 
         self.validate(spec)
         provider = self._provider_by_pattern.get(spec.pattern_id)
         if provider is None:
             raise ValueError(
-                f"{spec.pattern_id} is a built-in pattern; use the core runtime router, not an extension runtime"
+                f"{spec.pattern_id} is a built-in pattern; use build_runtime(), not an extension runtime"
             )
         provider.build_runtime(spec, context)
