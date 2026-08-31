@@ -2,11 +2,23 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypedDict
 from uuid import uuid4
 
 _GIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+class ReleaseEvidenceRow(TypedDict):
+    release_id: str
+    git_sha: str
+    environment: str
+    bundle_target: str
+    workflow_run_id: str
+    deployed_at: datetime
+    deployed_by: str
+    status: str
+    metadata: dict[str, str]
 
 
 def validate_git_sha(value: str) -> str:
@@ -23,7 +35,7 @@ def release_evidence_row(
     workflow_run_id: str,
     deployed_by: str,
     repository: str,
-) -> dict[str, Any]:
+) -> ReleaseEvidenceRow:
     return {
         "release_id": str(uuid4()),
         "git_sha": validate_git_sha(git_sha),
