@@ -15,14 +15,18 @@ class FakeProvider:
     def __init__(self) -> None:
         self.rows = {"source.orders": 4, "silver.orders": 4}
         self.keys = {"source.orders": 3, "silver.orders": 3}
+        self.scalars = {"source.orders": 2.0, "silver.orders": 2.0}
         self.missing = 0
         self.duplicates = 0
+        self.overlaps = 0
+        self.seen_keys: list[tuple[str, ...]] = []
+        self.seen_expression: str | None = None
 
     def row_count(self, relation: str) -> int:
         return self.rows[relation]
 
     def distinct_key_count(self, relation: str, keys: tuple[str, ...]) -> int:
-        assert keys == ("order_id",)
+        self.seen_keys.append(keys)
         return self.keys[relation]
 
     def missing_key_count(
@@ -31,12 +35,13 @@ class FakeProvider:
         target_relation: str,
         keys: tuple[str, ...],
     ) -> int:
-        assert (source_relation, target_relation, keys) == (
-            "source.orders",
-            "silver.orders",
-            ("order_id",),
-        )
+        assert (source_relation, target_relation) == ("source.orders", "silver.orders")
+        self.seen_keys.append(keys)
         return self.missing
+
+    def numeric_scalar(self, relation: str, expression: str) -> float:
+        self.seen_expression = expression
+        return self.scalars[relation]
 
     def current_duplicate_key_count(
         self,
@@ -45,18 +50,31 @@ class FakeProvider:
         end_column: str,
     ) -> int:
         assert relation == "silver.orders"
-        assert keys == ("order_id",)
         assert end_column == "__END_AT"
+        self.seen_keys.append(keys)
         return self.duplicates
 
+    def scd2_overlap_count(
+        self,
+        relation: str,
+        keys: tuple[str, ...],
+        start_column: str,
+        end_column: str,
+    ) -> int:
+        assert relation == "silver.orders"
+        assert start_column == "__START_AT"
+        assert end_column == "__END_AT"
+        self.seen_keys.append(keys)
+        return self.overlaps
 
-def context(*, position: str | None = "42") -> ReconciliationContext:
+
+def context(*, position: str | None = "42", business_keys: tuple[str, ...] = ("order_id",)) -> ReconciliationContext:
     return ReconciliationContext(
         cutoff_type="source_position",
         cutoff_value="42",
         source_relation="source.orders",
         target_relation="silver.orders",
-        business_keys=("order_id",),
+        business_keys=business_keys,
         observed_target_position=position,
     )
 
@@ -111,24 +129,66 @@ def test_source_position_requires_exact_observed_cutoff() -> None:
     assert report.status == "failed"
 
 
-def test_key_and_pk_and_scd2_uniqueness_measurements_are_supported() -> None:
+def test_key_pk_and_scd2_measurements_are_supported() -> None:
     spec = p12_spec()
     rules = [
         ReconciliationRule(name="keys", kind="key_count"),
         ReconciliationRule(name="presence", kind="pk_presence"),
         ReconciliationRule(name="current", kind="scd2_current_uniqueness"),
+        ReconciliationRule(name="overlap", kind="scd2_no_overlap"),
     ]
     spec = spec.model_copy(
         update={"reconciliation": spec.reconciliation.model_copy(update={"rules": rules})}
     )
-    report = evaluate_reconciliation(spec, context(), FakeProvider())
+    provider = FakeProvider()
+    report = evaluate_reconciliation(spec, context(), provider)
     assert report.status == "passed"
-    assert len(report.results) == 3
+    assert len(report.results) == 4
+    # key_count measures source and target separately, then the remaining three rules
+    # each consume the same reconciliation key once.
+    assert provider.seen_keys == [("order_id",)] * 5
+
+
+def test_aggregate_compares_same_reviewed_expression_at_same_cutoff() -> None:
+    spec = p12_spec()
+    rule = ReconciliationRule(
+        name="deleted_count",
+        kind="aggregate",
+        options={"expression": "sum(case when is_deleted then 1 else 0 end)"},
+    )
+    spec = spec.model_copy(
+        update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
+    )
+    provider = FakeProvider()
+    report = evaluate_reconciliation(spec, context(), provider)
+    assert report.status == "passed"
+    assert provider.seen_expression == "sum(case when is_deleted then 1 else 0 end)"
+
+
+def test_rule_specific_keys_do_not_require_business_identity() -> None:
+    spec = load_table_spec(ROOT / "examples/table_specs/country.yml")
+    provider = FakeProvider()
+    report = evaluate_reconciliation(spec, context(business_keys=()), provider)
+    assert report.status == "passed"
+    assert provider.seen_keys == [("country_code",), ("country_code",)]
+
+
+def test_scd2_overlap_violation_fails_report() -> None:
+    spec = p12_spec()
+    rule = ReconciliationRule(name="overlap", kind="scd2_no_overlap")
+    spec = spec.model_copy(
+        update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
+    )
+    provider = FakeProvider()
+    provider.overlaps = 1
+    report = evaluate_reconciliation(spec, context(), provider)
+    assert report.status == "failed"
+    assert report.results[0].actual_value == "1"
 
 
 def test_unimplemented_rule_fails_explicitly_instead_of_false_pass() -> None:
     spec = p12_spec()
-    rule = ReconciliationRule(name="hash", kind="hash")
+    rule = ReconciliationRule(name="operations", kind="operation_count")
     spec = spec.model_copy(
         update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
     )
