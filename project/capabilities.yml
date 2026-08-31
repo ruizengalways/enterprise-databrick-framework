@@ -18,22 +18,25 @@ semantic_catalog:
     - P13
     - P14
 runtime:
-  builtin_handlers_released: []
-  builtin_handlers_in_development:
+  builtin_handlers_released:
     - P01
     - P02
     - P07
     - P10
     - P12
+  builtin_handlers_in_development: []
+  normalized_capture_adapter_boundary: implemented
   databricks_runtime_certification_source: ruizengalways/enterprise-databrick-customer/certification/matrix.yml
 package:
   metadata_validation: implemented
   extension_provider_contract: implemented
   wheel_build: implemented
   control_table_schema_contract: implemented
-  builtin_runtime_registration: in_development
+  builtin_runtime_registration: implemented
 quality:
-  declarative_expectation_helpers: planned_for_runtime_verticals
+  warn_expectations: implemented
+  fail_expectations: implemented
+  quarantine_split: implemented_for_streaming_verticals
 reconciliation:
   reusable_execution_engine: not_released
 recovery:
@@ -41,3 +44,5 @@ recovery:
 rules:
   unreleased_branch_is_not_capability: true
   package_ci_is_not_databricks_runtime_certification: true
+  source_adapter_transport_is_not_framework_semantics: true
+  runtime_handler_release_does_not_imply_c3_certification: true
