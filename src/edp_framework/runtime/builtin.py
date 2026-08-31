@@ -87,8 +87,8 @@ def _sequence_by(spec: TableSpec) -> Any:
         raise ValueError(f"{spec.dataset_id}: authoritative source ordering is required")
     columns = spec.ordering.columns
     if len(columns) == 1:
-        # Databricks AUTO CDC accepts a column name directly. Returning a string keeps
-        # package tests importable outside a Databricks/PySpark runtime.
+        # AUTO CDC accepts a column name directly. Returning a string keeps package tests
+        # importable outside a Databricks/PySpark runtime.
         return columns[0]
 
     from pyspark.sql.functions import col, struct
@@ -137,7 +137,11 @@ def validate_builtin_runtime_contract(spec: TableSpec) -> None:
     if spec.pattern_id == "P10":
         if spec.bronze.contract is not BronzeContract.EVENT_HISTORY:
             raise ValueError(f"{spec.dataset_id}: P10 runtime requires event-history Bronze")
-        if spec.silver.contract not in {SilverContract.CURRENT, SilverContract.SCD1, SilverContract.SCD2}:
+        if spec.silver.contract not in {
+            SilverContract.CURRENT,
+            SilverContract.SCD1,
+            SilverContract.SCD2,
+        }:
             raise ValueError(f"{spec.dataset_id}: P10 v1 AUTO CDC runtime supports current/SCD1/SCD2")
         if spec.deletes.strategy is DeleteStrategy.CDC_DELETE and _string_option(
             spec, "apply_as_deletes"
@@ -273,13 +277,13 @@ def register_p02(spec: TableSpec, context: RuntimeContext) -> None:
     dp = context.pipelines
 
     dp.create_streaming_table(silver, comment=f"Snapshot-derived SCD2 for {spec.dataset_id}")
+    # Current Lakeflow API does not expose a `name` argument for snapshot AUTO CDC.
     dp.create_auto_cdc_from_snapshot_flow(
         target=silver,
         source=snapshot_source,
         keys=spec.identity.business_keys,
         stored_as_scd_type=2,
         track_history_column_list=spec.silver.tracked_columns or None,
-        name=runtime_name(spec.dataset_id, "snapshot_auto_cdc_scd2"),
     )
 
 
