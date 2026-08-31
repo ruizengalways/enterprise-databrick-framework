@@ -25,6 +25,18 @@ jobs:
           test ! -d platform
           test ! -d resources
           test ! -d config/environments
+      - name: Enforce human-machine documentation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find docs -type f ! -name '*.md' -print -quit | grep -q .; then
+            echo 'docs/ is human-readable Markdown only' >&2
+            exit 1
+          fi
+          if find project -type f ! \( -name '*.yml' -o -name '*.yaml' -o -name '*.json' \) -print -quit | grep -q .; then
+            echo 'project/ is machine-readable YAML/JSON only' >&2
+            exit 1
+          fi
       - name: Install
         run: pip install -e '.[dev]'
       - name: Validate example metadata
