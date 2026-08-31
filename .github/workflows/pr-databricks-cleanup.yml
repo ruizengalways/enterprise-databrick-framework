@@ -1,0 +1,34 @@
+name: Databricks PR cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: databricks-pr-${{ github.event.pull_request.number }}-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && vars.DATABRICKS_HOST != '' && vars.DATABRICKS_CLIENT_ID != '' && vars.DATABRICKS_RUNTIME_CLIENT_ID != '' && vars.DATABRICKS_OPERATOR_GROUP != '' }}
+    runs-on: ubuntu-latest
+    environment: ci
+    env:
+      DATABRICKS_AUTH_TYPE: github-oidc
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+      BUNDLE_VAR_runtime_service_principal: ${{ vars.DATABRICKS_RUNTIME_CLIENT_ID }}
+      BUNDLE_VAR_operator_group: ${{ vars.DATABRICKS_OPERATOR_GROUP }}
+      BUNDLE_VAR_ci_namespace: pr-${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout final PR head definition
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: databricks/setup-cli@main
+      - name: Destroy orphan-safe PR deployment
+        run: databricks bundle destroy -t ci --auto-approve

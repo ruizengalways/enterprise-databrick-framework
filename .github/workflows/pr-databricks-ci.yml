@@ -1,0 +1,45 @@
+name: Databricks PR integration
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: databricks-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  remote-ci:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && vars.DATABRICKS_HOST != '' && vars.DATABRICKS_CLIENT_ID != '' && vars.DATABRICKS_RUNTIME_CLIENT_ID != '' && vars.DATABRICKS_OPERATOR_GROUP != '' }}
+    runs-on: ubuntu-latest
+    environment: ci
+    env:
+      DATABRICKS_AUTH_TYPE: github-oidc
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+      BUNDLE_VAR_runtime_service_principal: ${{ vars.DATABRICKS_RUNTIME_CLIENT_ID }}
+      BUNDLE_VAR_operator_group: ${{ vars.DATABRICKS_OPERATOR_GROUP }}
+      BUNDLE_VAR_ci_namespace: pr-${{ github.event.pull_request.number }}
+      RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout PR head exactly
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: databricks/setup-cli@main
+      - name: Validate isolated CI target
+        run: databricks bundle validate -t ci
+      - name: Deploy isolated CI target
+        run: databricks bundle deploy -t ci
+      - name: Smoke isolated deployment
+        run: >-
+          databricks bundle run -t ci
+          --params git_sha=${RELEASE_SHA},workflow_run_id=${GITHUB_RUN_ID},deployed_by=${GITHUB_ACTOR},source_repository=${GITHUB_REPOSITORY}
+          release_gate
+      - name: Destroy ephemeral CI resources
+        if: always()
+        run: databricks bundle destroy -t ci --auto-approve

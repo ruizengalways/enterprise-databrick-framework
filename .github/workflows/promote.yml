@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: Exact commit SHA previously validated
+        description: Exact full commit SHA previously validated and deployed to shared DEV
         required: true
         type: string
       target:
@@ -29,6 +29,8 @@ jobs:
       DATABRICKS_AUTH_TYPE: github-oidc
       DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
       DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+      BUNDLE_VAR_runtime_service_principal: ${{ vars.DATABRICKS_RUNTIME_CLIENT_ID }}
+      BUNDLE_VAR_operator_group: ${{ vars.DATABRICKS_OPERATOR_GROUP }}
     steps:
       - name: Checkout exact release
         uses: actions/checkout@v4
@@ -38,19 +40,24 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - name: Install framework tests
-        run: pip install -e '.[dev]'
-      - name: Revalidate release
+      - name: Revalidate exact release
         run: |
           test "$(git rev-parse HEAD)" = "${{ inputs.release_sha }}"
+          pip install -e '.[dev]'
           edp validate config/tables
+          ruff check .
+          mypy src/edp_framework
           pytest
       - name: Install Databricks CLI
-        uses: databricks/setup-cli@v1.10.0
-      - name: Validate bundle
-        run: databricks bundle validate -t "${{ inputs.target }}"
+        uses: databricks/setup-cli@main
+      - name: Validate and plan bundle
+        run: |
+          databricks bundle validate -t "${{ inputs.target }}"
+          databricks bundle plan -t "${{ inputs.target }}"
       - name: Deploy exact release
         run: databricks bundle deploy -t "${{ inputs.target }}"
-      - name: Record deployment evidence
-        run: |
-          echo "Release history write is enabled in Phase 2 after control schema bootstrap."
+      - name: Smoke and record deployment evidence
+        run: >-
+          databricks bundle run -t "${{ inputs.target }}"
+          --params git_sha=${{ inputs.release_sha }},workflow_run_id=${GITHUB_RUN_ID},deployed_by=${GITHUB_ACTOR},source_repository=${GITHUB_REPOSITORY}
+          release_gate

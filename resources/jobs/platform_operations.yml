@@ -21,3 +21,74 @@ resources:
         - environment_key: default
           spec:
             environment_version: '2'
+
+    release_gate:
+      name: ${bundle.target}-edp-release-gate
+      description: Smoke-test the deployed control plane and record immutable release provenance.
+      tags:
+        platform: enterprise-databricks-framework
+        environment: ${bundle.target}
+        purpose: release-gate
+      parameters:
+        - name: git_sha
+          default: unknown
+        - name: workflow_run_id
+          default: manual
+        - name: deployed_by
+          default: manual
+        - name: source_repository
+          default: unknown
+      tasks:
+        - task_key: bootstrap_control_schema
+          python_wheel_task:
+            package_name: enterprise_databricks_framework
+            entry_point: bootstrap_control
+            parameters:
+              - --catalog
+              - ${var.catalog}
+          libraries:
+            - whl: ../../dist/*.whl
+          environment_key: default
+
+        - task_key: smoke_control_plane
+          depends_on:
+            - task_key: bootstrap_control_schema
+          python_wheel_task:
+            package_name: enterprise_databricks_framework
+            entry_point: release_smoke
+            parameters:
+              - --catalog
+              - ${var.catalog}
+          libraries:
+            - whl: ../../dist/*.whl
+          environment_key: default
+
+        - task_key: record_release
+          depends_on:
+            - task_key: smoke_control_plane
+          python_wheel_task:
+            package_name: enterprise_databricks_framework
+            entry_point: record_release
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --git-sha
+              - '{{job.parameters.git_sha}}'
+              - --environment
+              - ${bundle.target}
+              - --bundle-target
+              - ${bundle.target}
+              - --workflow-run-id
+              - '{{job.parameters.workflow_run_id}}'
+              - --deployed-by
+              - '{{job.parameters.deployed_by}}'
+              - --repository
+              - '{{job.parameters.source_repository}}'
+          libraries:
+            - whl: ../../dist/*.whl
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: '2'
