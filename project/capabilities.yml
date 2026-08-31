@@ -1,0 +1,43 @@
+schema_version: 1
+kind: framework_capabilities
+status_basis: released_main_only
+semantic_catalog:
+  patterns_defined:
+    - P01
+    - P02
+    - P03
+    - P04
+    - P05
+    - P06
+    - P07
+    - P08
+    - P09
+    - P10
+    - P11
+    - P12
+    - P13
+    - P14
+runtime:
+  builtin_handlers_released: []
+  builtin_handlers_in_development:
+    - P01
+    - P02
+    - P07
+    - P10
+    - P12
+  databricks_runtime_certification_source: ruizengalways/enterprise-databrick-customer/certification/matrix.yml
+package:
+  metadata_validation: implemented
+  extension_provider_contract: implemented
+  wheel_build: implemented
+  control_table_schema_contract: implemented
+  builtin_runtime_registration: in_development
+quality:
+  declarative_expectation_helpers: planned_for_runtime_verticals
+reconciliation:
+  reusable_execution_engine: not_released
+recovery:
+  repair_executor: not_released
+rules:
+  unreleased_branch_is_not_capability: true
+  package_ci_is_not_databricks_runtime_certification: true
