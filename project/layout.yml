@@ -6,8 +6,7 @@ root:
   docs: human architecture, ADRs, onboarding, and runbooks
   examples: package-owned metadata examples only; not certification or customer fixtures
   project: machine-readable repository capability and layout contracts
-  scripts: package development utilities
-  sql: reusable SQL assets owned by the package
+  scripts: package development utilities with real executable use
   src: installable Python source using the standard src layout
   templates: extension/package templates, not company infrastructure
   tests: deterministic package tests
@@ -23,9 +22,12 @@ package_modules:
 forbidden_package_placeholders:
   - common
   - extensions
+forbidden_reserved_roots:
+  - sql
 rules:
   standard_src_layout_is_required: true
   empty_capability_packages_are_forbidden: true
+  reserved_future_directories_are_forbidden: true
   planned_capabilities_belong_in_project_capabilities_not_empty_directories: true
   customer_fixtures_and_expected_results_do_not_belong_here: true
   terraform_and_bundle_environment_targets_do_not_belong_here: true
