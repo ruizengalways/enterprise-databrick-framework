@@ -38,7 +38,7 @@ def _int_option(spec: TableSpec, name: str) -> int | None:
         return None
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError(f"{spec.dataset_id}: capture.options.{name} must be a positive integer")
-    return value
+    return int(value)
 
 
 def _string_list_option(spec: TableSpec, name: str) -> list[str]:
