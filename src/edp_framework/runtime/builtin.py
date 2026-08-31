@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from edp_framework.metadata.models import (
     BronzeContract,
@@ -32,6 +32,15 @@ def _string_option(spec: TableSpec, name: str) -> str | None:
     return value
 
 
+def _int_option(spec: TableSpec, name: str) -> int | None:
+    value = spec.capture.options.get(name)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"{spec.dataset_id}: capture.options.{name} must be a positive integer")
+    return value
+
+
 def _string_list_option(spec: TableSpec, name: str) -> list[str]:
     value = spec.capture.options.get(name)
     if value is None:
@@ -46,12 +55,7 @@ def _unique(items: list[str]) -> list[str]:
 
 
 def _source_relation(spec: TableSpec, context: RuntimeContext) -> str:
-    """Resolve the normalized capture-adapter output consumed by the framework.
-
-    The framework intentionally does not embed JDBC/Kafka/API/file connector code in the
-    semantic runtime. A workload or extension adapter supplies a normalized relation and
-    the framework materializes the declared Bronze/Silver semantics from that boundary.
-    """
+    """Resolve the normalized capture-adapter output consumed by the framework."""
 
     configured = context.options.get("source_relation") or spec.capture.options.get(
         "reference_source_relation"
@@ -65,13 +69,7 @@ def _source_relation(spec: TableSpec, context: RuntimeContext) -> str:
 
 
 def _snapshot_source(spec: TableSpec, context: RuntimeContext) -> SnapshotSource:
-    """Return the workload-supplied historical snapshot iterator for P02.
-
-    `AUTO CDC FROM SNAPSHOT` supports a callback that receives the last processed version
-    and returns `(DataFrame, version)` or `None`. The callback belongs to the consuming
-    workload because snapshot discovery can mean files, API versions, database exports,
-    or another retained Bronze implementation. Core must not hard-code fixture versions.
-    """
+    """Return the workload-supplied historical snapshot iterator for P02."""
 
     value = context.options.get("snapshot_source")
     if not callable(value):
@@ -79,7 +77,7 @@ def _snapshot_source(spec: TableSpec, context: RuntimeContext) -> SnapshotSource
             f"{spec.dataset_id}: P02 requires RuntimeContext.options['snapshot_source'] "
             "as a callable returning (DataFrame, snapshot_version) or None"
         )
-    return value
+    return cast(SnapshotSource, value)
 
 
 def _sequence_by(spec: TableSpec) -> Any:
@@ -98,6 +96,13 @@ def _runtime_except_columns(spec: TableSpec) -> list[str] | None:
     configured = _string_list_option(spec, "runtime_except_columns")
     combined = _unique([*configured, *spec.identity.delivery_identity_columns])
     return combined or None
+
+
+def _cdc_target_properties(spec: TableSpec) -> dict[str, str] | None:
+    retention = _int_option(spec, "cdc_tombstone_retention_seconds")
+    if retention is None:
+        return None
+    return {"pipelines.cdc.tombstoneGCThresholdInSeconds": str(retention)}
 
 
 def validate_builtin_runtime_contract(spec: TableSpec) -> None:
@@ -141,13 +146,24 @@ def validate_builtin_runtime_contract(spec: TableSpec) -> None:
             SilverContract.SCD2,
         }:
             raise ValueError(f"{spec.dataset_id}: P10 v1 AUTO CDC runtime supports current/SCD1/SCD2")
-        if spec.deletes.strategy is DeleteStrategy.CDC_DELETE and _string_option(
-            spec, "apply_as_deletes"
-        ) is None:
-            raise ValueError(
-                f"{spec.dataset_id}: CDC delete semantics require explicit "
-                "capture.options.apply_as_deletes; core will not infer provider operation codes"
-            )
+        if spec.deletes.strategy is DeleteStrategy.CDC_DELETE:
+            if _string_option(spec, "apply_as_deletes") is None:
+                raise ValueError(
+                    f"{spec.dataset_id}: CDC delete semantics require explicit "
+                    "capture.options.apply_as_deletes; core will not infer provider operation codes"
+                )
+            maximum_delay = _int_option(spec, "max_out_of_order_delay_seconds")
+            tombstone_retention = _int_option(spec, "cdc_tombstone_retention_seconds")
+            if maximum_delay is None or tombstone_retention is None:
+                raise ValueError(
+                    f"{spec.dataset_id}: CDC delete runtime requires explicit "
+                    "max_out_of_order_delay_seconds and cdc_tombstone_retention_seconds"
+                )
+            if tombstone_retention <= maximum_delay:
+                raise ValueError(
+                    f"{spec.dataset_id}: cdc_tombstone_retention_seconds must exceed "
+                    "max_out_of_order_delay_seconds"
+                )
         _string_list_option(spec, "runtime_except_columns")
 
     if spec.pattern_id == "P12":
@@ -318,7 +334,11 @@ def register_p10(spec: TableSpec, context: RuntimeContext) -> None:
 
     stored_type = 2 if spec.silver.contract is SilverContract.SCD2 else 1
     dp = context.pipelines
-    dp.create_streaming_table(silver, comment=f"CDC-derived state/history for {spec.dataset_id}")
+    dp.create_streaming_table(
+        silver,
+        comment=f"CDC-derived state/history for {spec.dataset_id}",
+        table_properties=_cdc_target_properties(spec),
+    )
     dp.create_auto_cdc_flow(
         target=silver,
         source=valid_source,
