@@ -17,8 +17,10 @@ SUPPORTED_RULE_KINDS = frozenset(
         "row_count",
         "key_count",
         "pk_presence",
+        "aggregate",
         "source_position",
         "scd2_current_uniqueness",
+        "scd2_no_overlap",
     }
 )
 
@@ -26,15 +28,15 @@ SUPPORTED_RULE_KINDS = frozenset(
 def _numeric_result(
     rule: ReconciliationRule,
     *,
-    expected: int,
-    actual: int,
+    expected: float | int,
+    actual: float | int,
 ) -> ReconciliationResult:
     variance = float(abs(actual - expected))
     tolerance_mode = str(rule.options.get("tolerance_mode", "absolute"))
     if tolerance_mode == "absolute":
         compared_variance = variance
     elif tolerance_mode == "relative":
-        compared_variance = variance / max(abs(expected), 1)
+        compared_variance = variance / max(float(abs(expected)), 1.0)
     else:
         raise ValueError(
             f"reconciliation rule {rule.name}: unsupported tolerance_mode {tolerance_mode!r}"
@@ -56,11 +58,41 @@ def _numeric_result(
     )
 
 
-def _require_keys(spec: TableSpec, context: ReconciliationContext) -> tuple[str, ...]:
+def _rule_keys(
+    spec: TableSpec,
+    context: ReconciliationContext,
+    rule: ReconciliationRule,
+) -> tuple[str, ...]:
+    configured = rule.options.get("keys")
+    if configured is not None:
+        if (
+            not isinstance(configured, list)
+            or not configured
+            or not all(isinstance(value, str) and value.strip() for value in configured)
+        ):
+            raise ValueError(
+                f"{spec.dataset_id}: reconciliation rule {rule.name} options.keys must be "
+                "a non-empty list of column names"
+            )
+        return tuple(configured)
+
     keys = context.business_keys or tuple(spec.identity.business_keys)
     if not keys:
-        raise ValueError(f"{spec.dataset_id}: reconciliation rule requires stable business keys")
+        raise ValueError(
+            f"{spec.dataset_id}: reconciliation rule {rule.name} requires keys; declare "
+            "rule.options.keys when reconciliation identity differs from business identity"
+        )
     return keys
+
+
+def _required_expression(spec: TableSpec, rule: ReconciliationRule) -> str:
+    expression = rule.options.get("expression")
+    if not isinstance(expression, str) or not expression.strip():
+        raise ValueError(
+            f"{spec.dataset_id}: aggregate reconciliation rule {rule.name} requires "
+            "options.expression"
+        )
+    return expression
 
 
 def _evaluate_rule(
@@ -72,7 +104,7 @@ def _evaluate_rule(
     if rule.kind not in SUPPORTED_RULE_KINDS:
         raise NotImplementedError(
             f"reconciliation rule kind {rule.kind!r} is declared in metadata but is not "
-            "implemented by the reusable v1 engine; use an extension/runner rather than "
+            "implemented by the reusable v2 engine; use an extension/runner rather than "
             "silently treating it as passed"
         )
 
@@ -84,7 +116,7 @@ def _evaluate_rule(
         )
 
     if rule.kind == "key_count":
-        keys = _require_keys(spec, context)
+        keys = _rule_keys(spec, context, rule)
         return _numeric_result(
             rule,
             expected=provider.distinct_key_count(context.source_relation, keys),
@@ -92,7 +124,7 @@ def _evaluate_rule(
         )
 
     if rule.kind == "pk_presence":
-        keys = _require_keys(spec, context)
+        keys = _rule_keys(spec, context, rule)
         return _numeric_result(
             rule,
             expected=0,
@@ -103,8 +135,16 @@ def _evaluate_rule(
             ),
         )
 
+    if rule.kind == "aggregate":
+        expression = _required_expression(spec, rule)
+        return _numeric_result(
+            rule,
+            expected=provider.numeric_scalar(context.source_relation, expression),
+            actual=provider.numeric_scalar(context.target_relation, expression),
+        )
+
     if rule.kind == "scd2_current_uniqueness":
-        keys = _require_keys(spec, context)
+        keys = _rule_keys(spec, context, rule)
         end_column = str(rule.options.get("end_column", "__END_AT"))
         return _numeric_result(
             rule,
@@ -112,6 +152,21 @@ def _evaluate_rule(
             actual=provider.current_duplicate_key_count(
                 context.target_relation,
                 keys,
+                end_column,
+            ),
+        )
+
+    if rule.kind == "scd2_no_overlap":
+        keys = _rule_keys(spec, context, rule)
+        start_column = str(rule.options.get("start_column", "__START_AT"))
+        end_column = str(rule.options.get("end_column", "__END_AT"))
+        return _numeric_result(
+            rule,
+            expected=0,
+            actual=provider.scd2_overlap_count(
+                context.target_relation,
+                keys,
+                start_column,
                 end_column,
             ),
         )
