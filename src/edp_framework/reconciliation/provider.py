@@ -28,6 +28,8 @@ class ReconciliationMeasureProvider(Protocol):
 
     def numeric_scalar(self, relation: str, expression: str) -> float: ...
 
+    def categorical_counts(self, relation: str, column: str) -> dict[str, int]: ...
+
     def current_duplicate_key_count(
         self,
         relation: str,
@@ -85,6 +87,18 @@ class SparkMeasureProvider:
                 f"aggregate reconciliation expression returned NULL for relation {relation!r}"
             )
         return float(row[0])
+
+    def categorical_counts(self, relation: str, column: str) -> dict[str, int]:
+        """Count one reviewed categorical column without interpreting its business semantics."""
+
+        safe_column = _column(column)
+        rows = self.spark.table(relation).groupBy(safe_column).count().collect()
+        counts: dict[str, int] = {}
+        for row in rows:
+            value = row[safe_column]
+            category = "<NULL>" if value is None else str(value)
+            counts[category] = int(row["count"])
+        return dict(sorted(counts.items()))
 
     def current_duplicate_key_count(
         self,
