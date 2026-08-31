@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "enterprise-databricks-framework"
-version = "0.2.0"
+version = "0.3.0"
 description = "Production-grade metadata-driven Databricks lakehouse framework"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -28,6 +28,8 @@ edp = "edp_framework.cli:main"
 bootstrap_control = "edp_framework.databricks_tasks.bootstrap_control:main"
 release_smoke = "edp_framework.databricks_tasks.release_smoke:main"
 record_release = "edp_framework.databricks_tasks.record_release:main"
+seed_reference_sources = "edp_framework.databricks_tasks.seed_reference_sources:main"
+verify_reference_verticals = "edp_framework.databricks_tasks.verify_reference_verticals:main"
 
 [project.entry-points."edp.patterns"]
 # External packages register providers here. Example:

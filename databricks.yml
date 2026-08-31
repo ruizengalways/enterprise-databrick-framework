@@ -31,9 +31,11 @@ variables:
 
 sync:
   include:
+    - pyproject.toml
     - src/**
     - config/**
     - sql/**
+    - pipelines/**
 
 targets:
   dev:

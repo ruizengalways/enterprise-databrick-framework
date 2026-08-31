@@ -11,6 +11,7 @@ capture:
   execution: continuous
   options:
     topic: order-events
+    reference_source_relation: reference.fixture_commerce_order_events
 bootstrap:
   mode: event_stream_from_position
   handoff_position: configured retained Kafka offset or agreed business cutover event
@@ -48,16 +49,16 @@ identity:
   - _kafka_offset
 bronze:
   contract: event_history
-  table: commerce_bronze.order_events
+  table: bronze.commerce_order_events
   retention_days: 365
 silver:
   contract: canonical_events
-  table: commerce_silver.order_events
+  table: silver.commerce_order_events
   effective_time_column: event_time
 deletes:
   strategy: none
 quality:
-  quarantine_table: commerce_quarantine.order_events
+  quarantine_table: quarantine.commerce_order_events
   rules:
   - name: event_id_not_null
     expression: event_id IS NOT NULL

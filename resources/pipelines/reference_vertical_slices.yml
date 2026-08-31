@@ -1,0 +1,25 @@
+resources:
+  pipelines:
+    reference_vertical_slices:
+      name: ${bundle.target}-edp-reference-vertical-slices
+      catalog: ${var.catalog}
+      schema: bronze
+      serverless: true
+      channel: CURRENT
+      edition: ADVANCED
+      continuous: false
+      root_path: ${workspace.file_path}
+      configuration:
+        edp.catalog: ${var.catalog}
+        edp.environment: ${bundle.target}
+        edp.bundle_root: ${workspace.file_path}
+      libraries:
+        - glob:
+            include: ../../pipelines/reference/**
+      environment:
+        dependencies:
+          - --editable ${workspace.file_path}
+      tags:
+        platform: enterprise-databricks-framework
+        workload: reference-vertical-slices
+        environment: ${bundle.target}

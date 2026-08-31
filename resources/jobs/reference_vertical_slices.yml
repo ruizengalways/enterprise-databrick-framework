@@ -1,0 +1,45 @@
+resources:
+  jobs:
+    reference_vertical_slice_validation:
+      name: ${bundle.target}-edp-reference-vertical-slice-validation
+      description: Seed deterministic source fixtures, execute heterogeneous Lakeflow patterns, and assert exact outputs.
+      tags:
+        platform: enterprise-databricks-framework
+        purpose: reference-validation
+        environment: ${bundle.target}
+      tasks:
+        - task_key: seed_reference_sources
+          python_wheel_task:
+            package_name: enterprise_databricks_framework
+            entry_point: seed_reference_sources
+            parameters:
+              - --catalog
+              - ${var.catalog}
+          libraries:
+            - whl: ../../dist/*.whl
+          environment_key: default
+
+        - task_key: run_reference_pipeline
+          depends_on:
+            - task_key: seed_reference_sources
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.reference_vertical_slices.id}
+            full_refresh: false
+
+        - task_key: verify_reference_outputs
+          depends_on:
+            - task_key: run_reference_pipeline
+          python_wheel_task:
+            package_name: enterprise_databricks_framework
+            entry_point: verify_reference_verticals
+            parameters:
+              - --catalog
+              - ${var.catalog}
+          libraries:
+            - whl: ../../dist/*.whl
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: '2'

@@ -11,6 +11,8 @@ capture:
   execution: triggered
   options:
     schedule_class: daily
+    reference_source_relation: reference.fixture_legacy_customer_snapshots
+    reference_snapshot_versions: [1, 2, 3]
 bootstrap:
   mode: snapshot_only
   notes: Every snapshot is a complete comparable source image; SCD2 changes are observed at snapshot cadence.
@@ -37,11 +39,11 @@ identity:
   - _snapshot_id
 bronze:
   contract: snapshot_history
-  table: legacy_bronze.customer_snapshot
+  table: bronze.legacy_customer_snapshot
   retention_days: 730
 silver:
   contract: scd2
-  table: legacy_silver.customer_history
+  table: silver.legacy_customer_history
   tracked_columns:
   - name
   - segment

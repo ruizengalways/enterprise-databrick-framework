@@ -13,10 +13,10 @@ capture:
   execution: continuous
   options:
     topic: sales.public.customer
+    reference_source_relation: reference.fixture_sales_customer_cdc
 bootstrap:
   mode: snapshot_at_source_position
-  handoff_position: consistent source snapshot at LSN P, followed by CDC strictly after/around P with idempotent
-    overlap
+  handoff_position: consistent source snapshot at LSN P, followed by CDC strictly after/around P with idempotent overlap
   overlap_idempotent: true
 delivery:
   guarantee: at_least_once
@@ -56,12 +56,12 @@ identity:
   - _ingest_run_id
 bronze:
   contract: event_history
-  table: sales_bronze.customer_cdc
+  table: bronze.sales_customer_cdc
   preserve_raw_payload: true
   retention_days: 365
 silver:
   contract: scd2
-  table: sales_silver.customer_history
+  table: silver.sales_customer_history
   tracked_columns:
   - name
   - status
@@ -71,7 +71,7 @@ silver:
 deletes:
   strategy: cdc_delete
 quality:
-  quarantine_table: sales_quarantine.customer_cdc
+  quarantine_table: quarantine.sales_customer_cdc
   rules:
   - name: key_not_null
     expression: customer_id IS NOT NULL

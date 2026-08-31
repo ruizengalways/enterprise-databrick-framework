@@ -9,6 +9,8 @@ semantics: current_state
 capture:
   mechanism: full_snapshot
   execution: triggered
+  options:
+    reference_source_relation: reference.fixture_country_snapshot
 bootstrap:
   mode: snapshot_only
   notes: Each run is a complete authoritative snapshot.
@@ -25,11 +27,11 @@ identity:
   business_keys: []
 bronze:
   contract: current_replica
-  table: reference_bronze.country
+  table: bronze.reference_country
   retention_days: 30
 silver:
   contract: snapshot_replace
-  table: reference_silver.country
+  table: silver.reference_country
 deletes:
   strategy: snapshot_absence
 quality:
