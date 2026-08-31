@@ -1,6 +1,6 @@
 # Enterprise Databricks Framework — Project Blueprint
 
-Status: Phase 0 foundation
+Status: Phase 1 platform foundation and Phase 2 delivery spine implemented in code; remote Databricks OIDC deployment proof pending
 
 This document is the canonical architecture source of truth for the repository. Important platform decisions must be recorded here and, where material, in an ADR.
 
@@ -62,6 +62,16 @@ Unity Catalog
 Workspace-catalog binding is required for production so PROD catalogs cannot be queried from DEV/UAT workspaces even if a principal accidentally receives object privileges.
 
 For larger regulated organisations, separate metastores/accounts/regions may be justified; that is an environment-specific deployment decision rather than a framework requirement.
+
+The Bundle target model deliberately distinguishes personal development from stable shared development:
+
+```text
+dev        -> developer-owned deployment in edp_dev
+ci         -> ephemeral PR namespace in edp_ci
+shared_dev -> CI/CD-owned stable release in edp_dev
+uat        -> CI/CD-owned release in edp_uat
+prod       -> CI/CD-owned release in edp_prod
+```
 
 ## 5. Repository strategy
 
@@ -187,6 +197,8 @@ Prefer Lakeflow Jobs for schedules, task dependencies, retries, repair runs and 
 
 Use custom Structured Streaming/foreachBatch only when native declarative primitives cannot satisfy a real requirement. The framework should not reimplement checkpoint state machines by default.
 
+Declarative Automation Bundles use the direct deployment engine. Terraform owns long-lived platform infrastructure; Bundles own workload resources. The deprecated Terraform-backed Bundle engine is not part of the target architecture.
+
 ## 12. Bootstrap strategy
 
 Every incremental/CDC dataset must define the initial baseline and handoff point.
@@ -276,6 +288,8 @@ Core tables:
 
 Desired pattern, keys, SCD strategy and rules remain in Git.
 
+Release provenance is written only after a deployed release passes the control-plane smoke gate. A release record contains the exact full Git SHA, Bundle target, workflow run, deploy actor and repository metadata.
+
 ## 18. Recovery model
 
 Failure classes are handled deliberately:
@@ -343,6 +357,18 @@ Use:
 - row filters/column masks where required
 - synthetic/masked test data in non-production where production data access is inappropriate
 
+Shared environments use two distinct identities:
+
+```text
+GitHub deployer service principal
+  -> GitHub OIDC
+  -> validate/plan/deploy Bundle resources
+
+Runtime service principal
+  -> Bundle run_as
+  -> execute workloads with only required Unity Catalog privileges
+```
+
 ## 22. CI/CD and promotion
 
 Use Declarative Automation Bundles for Databricks workload definitions and source artifacts.
@@ -369,6 +395,15 @@ Never independently deploy "whatever main is now" to each environment.
 
 Deployment evidence must include Git SHA, bundle target, deploy identity, workflow run, tests, release timestamp and result.
 
+Current delivery resources include:
+
+- PR validation and Terraform module validation
+- optional remote PR Bundle integration when the `ci` GitHub Environment has OIDC configuration
+- independent PR-close cleanup for orphan protection
+- automatic shared DEV deployment from the exact merge SHA when DEV OIDC configuration exists
+- manual immutable-SHA UAT/PROD promotion protected by GitHub Environments
+- `release_gate` smoke test and release-history write
+
 ## 23. Resource ownership matrix
 
 | Resource | Authoritative owner |
@@ -378,6 +413,7 @@ Deployment evidence must include Git SHA, bundle target, deploy identity, workfl
 | workspace-catalog binding | Terraform/platform automation |
 | long-lived UC catalogs/base schemas | Terraform/platform automation |
 | account groups/service principals | Terraform/identity automation |
+| GitHub OIDC federation policies | Terraform/identity automation |
 | Lakeflow Jobs | Declarative Automation Bundles |
 | Lakeflow Pipelines | Declarative Automation Bundles |
 | workload code/package | Git + Bundle artifact |
@@ -388,6 +424,8 @@ Deployment evidence must include Git SHA, bundle target, deploy identity, workfl
 | platform-specific reconciliation outcomes | Delta control tables |
 
 No resource should be simultaneously managed by Terraform and Bundles without an explicit ADR.
+
+Terraform state is split by blast radius/change cadence. Account/workspace bootstrap, identity/OIDC, Unity Catalog environment foundations and workspace bindings are independent roots/states. Workload resources are not placed in Terraform state.
 
 ## 24. Extension/package architecture
 
@@ -448,6 +486,8 @@ Required test layers:
 
 Failure-injection catalogue includes duplicate CDC, out-of-order CDC, late rows, deletes, source gap, schema change, null key, partial failure, bad release, checkpoint reset and reconciliation mismatch.
 
+The standard PR gate currently validates table metadata, Ruff, strict mypy, Python tests/coverage, Terraform formatting, Terraform provider initialization and Terraform module validation. Remote Databricks integration is a separate conditional gate until OIDC is configured.
+
 ## 27. Cost strategy
 
 Use serverless/job compute where appropriate, workload tagging, system billing tables, budget alerts and workload isolation. Cost is treated as an observable platform SLO, not a one-time sizing exercise.
@@ -470,7 +510,9 @@ A genuinely new semantic pattern should be delivered as an extension package and
 ## 29. Implementation roadmap
 
 ### Phase 0 — Architecture and contracts
-Implemented in this repository snapshot:
+
+Implemented:
+
 - canonical blueprint
 - repository skeleton
 - P01-P14 pattern catalogue
@@ -479,28 +521,57 @@ Implemented in this repository snapshot:
 - example table contracts
 - runtime control DDL
 - validation CLI
-- CI skeleton
+- CI foundation
 - repository navigation map for company adoption
 - 5 heterogeneous reference dataset contracts
-- 14 passing core tests covering pattern/metadata/control invariants
+- metadata/pattern/control tests
 
 ### Phase 1 — Platform foundation
-Next:
-- Terraform account/workspace/UC baseline
-- DEV/CI/UAT/PROD targets
-- service principals and workload identity
-- catalog bindings
-- base schemas/control deployment
+
+Implemented in reusable code:
+
+- cloud-neutral Terraform module boundary
+- isolated Unity Catalog environment/catalog module
+- long-lived base schemas and least-privilege runtime grants
+- separate workspace-binding module using `databricks_workspace_binding`
+- GitHub OIDC service-principal federation module
+- deployer/runtime identity separation
+- DEV/CI/shared DEV/UAT/PROD Bundle target model
+- separate Terraform state boundaries by platform concern
+
+Still environment-specific and intentionally not hard-coded:
+
+- AWS/Azure/GCP workspace/network/storage bootstrap
+- real account/metastore/workspace IDs
+- organisation groups and service-principal grants outside the reusable module contract
 
 ### Phase 2 — Thin delivery spine
-- deploy trivial Bundle resource to DEV
-- PR CI isolation
-- immutable SHA promotion
-- release history recording
-- smoke tests
+
+Implemented in code:
+
+- Bundle direct deployment engine
+- isolated PR deployment namespace
+- independent PR cleanup workflow
+- immutable full-SHA promotion contract
+- stable shared DEV deployment target
+- UAT/PROD promotion workflow
+- service-principal runtime identity
+- release control-plane smoke job
+- release provenance persisted to `platform_control.release_history`
+- Terraform/Python static CI gates
+
+Pending real environment proof:
+
+- configure GitHub Environments and Databricks OIDC identities
+- run PR deploy/smoke/destroy against Databricks
+- merge a known SHA to shared DEV
+- verify the same SHA is recorded in `edp_dev.platform_control.release_history`
+- promote that exact SHA to UAT/PROD when real environments exist
 
 ### Phase 3 — Vertical slices
+
 Implement deliberately heterogeneous datasets:
+
 - full snapshot/current
 - watermark+lookback+soft-delete raw observations
 - Debezium full CDC -> SCD2
@@ -508,6 +579,7 @@ Implement deliberately heterogeneous datasets:
 - snapshot history -> SCD2
 
 ### Phase 4 — Operability
+
 - reconciliation runner
 - repair request executor
 - source-state commits
@@ -515,6 +587,7 @@ Implement deliberately heterogeneous datasets:
 - failure-injection suite
 
 ### Phase 5 — Governance/observability/cost hardening
+
 - system table dashboards
 - audit/security tests
 - classification/masking/row filtering examples
@@ -523,10 +596,36 @@ Implement deliberately heterogeneous datasets:
 
 ## 30. Current implementation status
 
-The repository has a product-oriented architecture and executable metadata validation package. It is **not yet claimed to be a complete production deployment** because cloud-specific workspaces, credentials, Lakeflow resources and real end-to-end vertical slices have not yet been provisioned. The foundation intentionally makes those later phases additive rather than requiring redesign.
+The repository now has a tested platform-foundation and delivery-spine implementation in addition to the Phase 0 metadata framework. The reusable Terraform modules validate against the pinned Databricks provider family, and the standard Python/metadata CI gate passes.
+
+The project **does not yet claim that the remote Databricks deployment path has been proven**. GitHub Environment OIDC variables and actual Databricks workspaces/service principals are deployment-environment inputs; until they are configured, remote PR integration and shared-DEV deployment workflows intentionally skip rather than pretending deployment succeeded.
+
+No business vertical slice has been implemented yet. That boundary is intentional: the platform delivery mechanism is established before broad ingestion code is added.
 
 ## 31. Next implementation step
 
-Implement Phase 1 environment/platform foundation and Phase 2 thin delivery spine before adding broad business pipelines. The next concrete milestone is:
+First prove the delivery spine in a real Databricks CI/DEV environment:
 
-> One immutable Git SHA can validate and deploy a trivial Lakeflow workload through DEV -> UAT -> PROD using separate least-privilege service principals, with release metadata persisted to `platform_control.release_history`.
+```text
+GitHub PR SHA
+-> OIDC deployment identity
+-> isolated CI Bundle deploy
+-> release-gate smoke
+-> Bundle destroy
+-> merge exact SHA
+-> shared DEV deploy
+-> release_history contains that exact SHA
+```
+
+Then begin Phase 3 with the deliberately heterogeneous executable vertical slices. The first set should prove P01 full snapshot/current, P07 watermark+lookback+soft-delete raw observations, P10 Debezium full CDC -> SCD2, P12 domain events and P02 snapshot-history -> SCD2.
+
+## 32. Architecture decision index
+
+- ADR-001: repository boundary
+- ADR-002: metadata taxonomy
+- ADR-003: runtime-state boundary
+- ADR-004: extension packages
+- ADR-005: Databricks resource ownership
+- ADR-006: recovery principle
+- ADR-007: personal DEV vs shared DEV target
+- ADR-008: Terraform state boundaries
