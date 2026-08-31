@@ -4,7 +4,16 @@ An installable, production-oriented Python framework for metadata-driven Databri
 
 This repository is intentionally **package-only**. It owns reusable pipeline semantics and runtime behavior; it does not own a company's Databricks workspaces, Unity Catalog topology, Terraform state, GitHub OIDC identities, Bundle environment targets or DEV/UAT/PROD platform deployment.
 
-Platform/IaC examples live separately in [`enterprise-databrick-infra`](https://github.com/ruizengalways/enterprise-databrick-infra).
+## Ecosystem
+
+This repository is one part of a deliberately separated reference ecosystem:
+
+- [`data-engineering-cheetsheet`](https://github.com/ruizengalways/data-engineering-cheetsheet) — technology-neutral semantic/design source of truth for P01-P14.
+- **`enterprise-databrick-framework`** — reusable package (this repo).
+- [`enterprise-databrick-customer`](https://github.com/ruizengalways/enterprise-databrick-customer) — reference consuming workload, deterministic learning data and exact-SHA certification evidence.
+- [`enterprise-databrick-infra`](https://github.com/ruizengalways/enterprise-databrick-infra) — optional platform/IaC baseline.
+
+For a new conversation or a returning engineer, start with [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). The customer repository contains the cross-repository certification lock and coverage matrix.
 
 ## What you take to a new company
 
@@ -98,7 +107,15 @@ mypy src/edp_framework
 python -m pip wheel . --no-deps --wheel-dir dist
 ```
 
-In a consuming project, pin the framework like any other internal library: a released wheel/version is preferred over copying framework source into every project.
+In a consuming project, pin the framework like any other internal library: a released wheel/version or exact SHA-derived artifact is preferred over copying framework source into every project.
+
+## Certification
+
+Package CI proves package-level behavior only. It does **not** prove real Databricks runtime behavior for every semantic pattern.
+
+`enterprise-databrick-customer` is the independent reference consumer used to certify exact framework SHAs against deterministic source data and expected outcomes. Its certification model deliberately separates local contract/package evidence from real Databricks runtime and recovery evidence.
+
+Never describe a pattern/capability as runtime-certified unless the customer certification matrix has corresponding evidence for the exact framework SHA.
 
 ## Extension model
 

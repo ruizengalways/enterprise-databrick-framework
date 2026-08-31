@@ -1,6 +1,12 @@
 # Capability matrix
 
-Legend: **implemented** = reusable package code exists and is covered by package tests; **in progress** = design/contract exists but executable coverage is still being expanded.
+Legend:
+
+- **implemented** = reusable package code exists and is covered by package tests;
+- **in progress** = design/contract exists but executable package/runtime coverage is still being expanded;
+- **out of scope** = belongs to a consuming workload/platform repository.
+
+Package status is **not** the same as Databricks runtime certification. Independent exact-SHA certification evidence lives in `enterprise-databrick-customer/certification/`.
 
 | Capability | Package status | Platform dependency |
 |---|---|---|
@@ -19,5 +25,9 @@ Legend: **implemented** = reusable package code exists and is covered by package
 | Repair executor | in progress | source/target access and organisation approval policy |
 | Terraform workspaces/catalogs/OIDC | out of scope | companion infra/company platform |
 | DEV/UAT/PROD deployment | out of scope | consuming repo/platform CI/CD |
+
+## Certification rule
+
+A package capability may be `implemented` while its customer/runtime certification is still `not_run`. Only the customer certification matrix may make a cross-repository certification claim for an exact framework SHA.
 
 The framework can declare what runtime capability is required; it does not own the organisation-specific infrastructure that provides it.

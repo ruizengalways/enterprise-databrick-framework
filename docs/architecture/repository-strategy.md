@@ -1,11 +1,45 @@
 # Repository Strategy
 
+Status: current after the 2026-08-31 package/infra split.
+
 ## Decision
 
-Use one Databricks platform repository containing a clean reusable Python package.
+Use separate repositories for separate ownership/lifecycle boundaries:
 
-## Why not a second core repository now?
+```text
+data-engineering-cheetsheet
+  -> semantic/design knowledge
 
-A separate core repository introduces package publishing, dependency pinning, coordinated version upgrades, compatibility testing and cross-repo release management before any second consumer exists. That cost does not increase reusability today.
+enterprise-databrick-framework
+  -> versioned reusable Python package
 
-The current `src/edp_framework` package already creates the extraction seam. When a second independently released Databricks platform needs it, move that package to its own repository and publish a versioned wheel without redesigning table metadata or imports.
+enterprise-databrick-customer
+  -> consuming reference workload + learning/certification evidence
+
+enterprise-databrick-infra
+  -> optional platform/IaC baseline
+```
+
+## Why the split is intentional
+
+A reusable framework must work inside a company that already has workspaces, Unity Catalog, networking, identities and CI/CD. Requiring adoption of this project's Terraform would reduce reusability and force normal data engineers to own platform code unnecessarily.
+
+The customer/reference repository proves the package boundary: it consumes the framework as a dependency and owns its own metadata, fixtures and expected results.
+
+The infra repository is optional and independently useful for greenfield/platform-team learning. It is not a runtime dependency of the framework.
+
+## Dependency direction
+
+```text
+cheatsheet (semantic reference)
+       |
+       v
+framework package
+       |
+       v
+customer / company workload
+
+infra -> supplies platform capabilities to workload, when needed
+```
+
+Avoid circular source dependencies. In particular, the framework must never import customer or infra code.
