@@ -34,11 +34,27 @@ package:
   control_table_schema_contract: implemented
   builtin_runtime_registration: implemented
 quality:
+  package_namespace: edp_framework.quality
   warn_expectations: implemented
   fail_expectations: implemented
   quarantine_split: implemented_for_streaming_verticals
 reconciliation:
-  reusable_execution_engine: not_released
+  reusable_execution_engine: implemented_v1
+  cutoff_consistency_required: true
+  spark_measure_provider: implemented
+  control_table_audit_persistence: implemented
+  supported_rule_kinds:
+    - row_count
+    - key_count
+    - pk_presence
+    - source_position
+    - scd2_current_uniqueness
+  declared_but_not_yet_implemented_rule_kinds:
+    - aggregate
+    - hash
+    - operation_count
+    - scd2_no_overlap
+    - custom
 recovery:
   repair_executor: not_released
 rules:
@@ -46,3 +62,4 @@ rules:
   package_ci_is_not_databricks_runtime_certification: true
   source_adapter_transport_is_not_framework_semantics: true
   runtime_handler_release_does_not_imply_c3_certification: true
+  unsupported_reconciliation_rule_must_fail_explicitly: true
