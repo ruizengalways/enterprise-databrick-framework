@@ -172,9 +172,12 @@ def test_p07_preserves_source_soft_delete_row_in_current_target() -> None:
     assert "_ingest_run_id" in call["except_column_list"]
 
 
-def test_p10_requires_provider_owned_delete_expression() -> None:
+def test_p10_requires_provider_delete_and_tombstone_policy() -> None:
     spec = load_table_spec(EXAMPLES / "customer_debezium_scd2.yml")
     assert builtin._string_option(spec, "apply_as_deletes") == "_operation = 'd'"
+    assert builtin._cdc_target_properties(spec) == {
+        "pipelines.cdc.tombstoneGCThresholdInSeconds": "604800"
+    }
     builtin.validate_builtin_runtime_contract(spec)
 
     payload = spec.model_dump(mode="python")
@@ -183,6 +186,12 @@ def test_p10_requires_provider_owned_delete_expression() -> None:
     with pytest.raises(ValueError, match="apply_as_deletes"):
         builtin.validate_builtin_runtime_contract(incomplete)
 
+    payload = spec.model_dump(mode="python")
+    payload["capture"]["options"]["cdc_tombstone_retention_seconds"] = 3600
+    invalid_retention = type(spec).model_validate(payload)
+    with pytest.raises(ValueError, match="must exceed"):
+        builtin.validate_builtin_runtime_contract(invalid_retention)
+
 
 def test_p12_registers_watermark_and_event_identity_dedup() -> None:
     spec = load_table_spec(EXAMPLES / "order_events.yml")
@@ -190,12 +199,19 @@ def test_p12_registers_watermark_and_event_identity_dedup() -> None:
 
     PatternRegistry(load_plugins=False).build_runtime(spec, runtime)
 
-    silver = next(function for kwargs, function in dp.tables if kwargs["name"] == "edp_test.commerce_silver.order_events")
+    silver = next(
+        function
+        for kwargs, function in dp.tables
+        if kwargs["name"] == "edp_test.commerce_silver.order_events"
+    )
     frame = silver()
     assert frame is spark.frames[-1]
     assert frame.watermarks == [("event_time", "7 days")]
     assert frame.dedup_keys == [["event_id"]]
-    assert any(kwargs["name"] == "edp_test.commerce_quarantine.order_events" for kwargs, _ in dp.tables)
+    assert any(
+        kwargs["name"] == "edp_test.commerce_quarantine.order_events"
+        for kwargs, _ in dp.tables
+    )
 
 
 def test_unimplemented_builtin_runtime_fails_explicitly() -> None:
