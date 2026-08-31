@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from company_pattern_extension.runtime import register_runtime
 from edp_framework.metadata.models import BronzeContract, SilverContract, TableSpec
 from edp_framework.patterns.contracts import PatternDefinition, RuntimeContext
-
-from company_pattern_extension.runtime import register_runtime
 
 
 class CompanyPatternProvider:

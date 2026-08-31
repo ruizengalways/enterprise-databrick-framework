@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from importlib.metadata import entry_points
-from typing import Iterable
 
 from edp_framework.metadata.models import TableSpec
 from edp_framework.patterns.builtins import BUILTIN_PATTERNS, validate_builtin_pattern

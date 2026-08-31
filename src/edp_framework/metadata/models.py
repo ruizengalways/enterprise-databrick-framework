@@ -134,7 +134,7 @@ class BootstrapSpec(StrictModel):
     notes: str | None = None
 
     @model_validator(mode="after")
-    def validate_handoff(self) -> "BootstrapSpec":
+    def validate_handoff(self) -> BootstrapSpec:
         explicit_handoff = {
             BootstrapMode.FULL_THEN_INCREMENTAL,
             BootstrapMode.SNAPSHOT_AT_SOURCE_POSITION,
@@ -151,7 +151,7 @@ class DeliverySpec(StrictModel):
     retry_safe: bool = True
 
     @model_validator(mode="after")
-    def validate_at_least_once(self) -> "DeliverySpec":
+    def validate_at_least_once(self) -> DeliverySpec:
         if self.guarantee is DeliveryGuarantee.AT_LEAST_ONCE and not self.idempotency_key_columns:
             raise ValueError("at_least_once delivery requires idempotency_key_columns")
         return self
@@ -168,7 +168,7 @@ class RetentionSpec(StrictModel):
     alert_before_expiry_hours: int = Field(default=24, ge=1)
 
     @model_validator(mode="after")
-    def validate_source_window(self) -> "RetentionSpec":
+    def validate_source_window(self) -> RetentionSpec:
         if (
             self.source_replay_window_hours is not None
             and self.source_replay_window_hours < self.required_recovery_window_hours
@@ -188,7 +188,7 @@ class CaptureSpec(StrictModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_custom_provider(self) -> "CaptureSpec":
+    def validate_custom_provider(self) -> CaptureSpec:
         if self.mechanism is CaptureMechanism.CUSTOM_PACKAGE and not self.provider_package:
             raise ValueError("custom_package capture requires provider_package")
         return self
@@ -237,7 +237,7 @@ class DeleteSpec(StrictModel):
     deleted_values: list[Any] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_soft_delete(self) -> "DeleteSpec":
+    def validate_soft_delete(self) -> DeleteSpec:
         if self.strategy is DeleteStrategy.SOURCE_SOFT_DELETE and not self.indicator_column:
             raise ValueError("source_soft_delete requires indicator_column")
         return self
@@ -256,7 +256,7 @@ class QualitySpec(StrictModel):
     quarantine_table: str | None = None
 
     @model_validator(mode="after")
-    def validate_quarantine(self) -> "QualitySpec":
+    def validate_quarantine(self) -> QualitySpec:
         if any(r.action is DQAction.QUARANTINE for r in self.rules) and not self.quarantine_table:
             raise ValueError("quarantine rules require quarantine_table")
         return self
@@ -342,7 +342,7 @@ class TableSpec(StrictModel):
     tags: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_semantics(self) -> "TableSpec":
+    def validate_semantics(self) -> TableSpec:
         keys = self.identity.business_keys
         merge_like = {
             SilverContract.CURRENT,

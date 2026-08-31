@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from edp_framework.metadata.models import BronzeContract as B
-from edp_framework.metadata.models import ChangeGranularity, DataSemantics
+from edp_framework.metadata.models import ChangeGranularity, DataSemantics, TableSpec
 from edp_framework.metadata.models import SilverContract as S
-from edp_framework.metadata.models import TableSpec
 from edp_framework.patterns.contracts import PatternDefinition
 
 
