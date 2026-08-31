@@ -5,7 +5,7 @@ from edp_framework.patterns.registry import PatternRegistry
 
 
 def test_all_reference_table_configs_are_valid() -> None:
-    root = Path(__file__).parents[2] / "config" / "tables"
+    root = Path(__file__).parents[2] / "examples" / "table_specs"
     specs = load_table_specs(root)
     registry = PatternRegistry(load_plugins=False)
 

@@ -1,8 +1,0 @@
-environment: prod
-workspace_role: production
-catalog: edp_prod
-control_schema: platform_control
-allow_interactive_engineering: false
-requires_release_sha: true
-workspace_catalog_binding_required: true
-run_as_service_principal_required: true

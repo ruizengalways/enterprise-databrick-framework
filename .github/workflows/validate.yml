@@ -1,4 +1,4 @@
-name: Validate
+name: Validate framework package
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  python-and-contracts:
+  package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,32 +17,23 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+      - name: Enforce package-only repository boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e databricks.yml
+          test ! -d platform
+          test ! -d resources
+          test ! -d config/environments
       - name: Install
         run: pip install -e '.[dev]'
-      - name: Validate metadata
-        run: edp validate config/tables
+      - name: Validate example metadata
+        run: edp validate examples/table_specs
       - name: Lint
         run: ruff check .
       - name: Type check
         run: mypy src/edp_framework
       - name: Tests
         run: pytest --cov=edp_framework --cov-report=term-missing
-
-  terraform-modules:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.14.3'
-      - name: Terraform format
-        run: terraform fmt -check -recursive platform/terraform
-      - name: Terraform validate modules
-        shell: bash
-        run: |
-          set -euo pipefail
-          for module in platform/terraform/modules/*; do
-            echo "Validating ${module}"
-            terraform -chdir="${module}" init -backend=false -input=false
-            terraform -chdir="${module}" validate
-          done
+      - name: Build reusable wheel
+        run: python -m pip wheel . --no-deps --wheel-dir dist

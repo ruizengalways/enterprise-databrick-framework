@@ -1,6 +1,0 @@
-environment: dev
-workspace_role: engineering
-catalog: edp_dev
-control_schema: platform_control
-allow_interactive_engineering: true
-production_data_access: false
