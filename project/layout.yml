@@ -1,0 +1,34 @@
+schema_version: 1
+kind: repository_layout
+repository_type: reusable_python_package
+principle: directory_names_must_correspond_to_real_owned_capabilities
+root:
+  docs: human architecture, ADRs, onboarding, and runbooks
+  examples: package-owned metadata examples only; not certification or customer fixtures
+  project: machine-readable repository capability and layout contracts
+  scripts: package development utilities with real executable use
+  src: installable Python source using the standard src layout
+  templates: extension/package templates, not company infrastructure
+  tests: deterministic package tests
+package_root: src/edp_framework
+package_modules:
+  metadata: metadata models, loading, and validation
+  patterns: semantic pattern definitions, registry, and extension-provider contract
+  runtime: Databricks/Lakeflow registration and runtime naming; quality shim retained for compatibility
+  quality: reusable DQ rule selection, predicates, and Lakeflow expectation decoration
+  reconciliation: cutoff-consistent reconciliation decision engine, Spark measurements, and audit persistence
+  operations: reusable runtime control-table and release-observation helpers
+  databricks_tasks: reusable task entrypoints that call package operations
+forbidden_package_placeholders:
+  - common
+  - extensions
+forbidden_reserved_roots:
+  - sql
+rules:
+  standard_src_layout_is_required: true
+  empty_capability_packages_are_forbidden: true
+  reserved_future_directories_are_forbidden: true
+  planned_capabilities_belong_in_project_capabilities_not_empty_directories: true
+  customer_fixtures_and_expected_results_do_not_belong_here: true
+  terraform_and_bundle_environment_targets_do_not_belong_here: true
+  extension_contract_lives_in_patterns_and_templates: true
