@@ -1,5 +1,6 @@
-"""Cutoff-consistent reconciliation engine and Spark measurement provider."""
+"""Cutoff-consistent reconciliation engine, measurements, and audit persistence."""
 
+from edp_framework.reconciliation.audit import persist_reconciliation_report
 from edp_framework.reconciliation.engine import evaluate_reconciliation
 from edp_framework.reconciliation.models import (
     ReconciliationContext,
@@ -18,4 +19,5 @@ __all__ = [
     "ReconciliationResult",
     "SparkMeasureProvider",
     "evaluate_reconciliation",
+    "persist_reconciliation_report",
 ]
