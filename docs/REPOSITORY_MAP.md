@@ -60,7 +60,11 @@ The extension API is intentionally **not** an `extensions/` package. The executa
 
 Reconciliation compares source and target representations that the consuming workload has already aligned to one explicit cutoff. The package must not query a moving source at time A and a target at time B and call the difference a data-quality failure.
 
-The v1 engine supports row count, distinct business-key count, source-key presence, source-position equality, and SCD2 current-row uniqueness. Other metadata rule kinds fail explicitly until implemented; they are never silently treated as passed.
+The v2 engine supports row count, distinct-key count, source-key presence, reviewed numeric aggregates, source-position equality, SCD2 current-row uniqueness, and SCD2 no-overlap checks. Key-based rules may declare `options.keys` when the reconciliation comparison key is intentionally different from the dataset's business identity; P01 snapshot replacement is the reference example.
+
+`hash`, `operation_count`, and `custom` remain declared metadata kinds but are not core-engine implementations. They fail explicitly if passed to the core evaluator. In particular, `operation_count` needs an application/audit relation and must not be guessed from an SCD2 target that no longer preserves source operation codes.
+
+Executable reconciliation metadata is validated before runtime: aggregate rules require an expression, key-based rules require either business keys or explicit rule keys, and tolerance modes must be supported.
 
 ## Rule of thumb
 
