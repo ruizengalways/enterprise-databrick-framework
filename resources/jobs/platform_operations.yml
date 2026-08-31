@@ -1,0 +1,23 @@
+resources:
+  jobs:
+    platform_operations:
+      name: ${bundle.target}-edp-platform-operations
+      description: Auditable platform bootstrap and operational entry points.
+      tags:
+        platform: enterprise-databricks-framework
+        environment: ${bundle.target}
+      tasks:
+        - task_key: bootstrap_control_schema
+          python_wheel_task:
+            package_name: enterprise_databricks_framework
+            entry_point: bootstrap_control
+            parameters:
+              - --catalog
+              - ${var.catalog}
+          libraries:
+            - whl: ../../dist/*.whl
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: '2'

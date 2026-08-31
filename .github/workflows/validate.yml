@@ -1,0 +1,29 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-and-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install
+        run: pip install -e '.[dev]'
+      - name: Validate metadata
+        run: edp validate config/tables
+      - name: Lint
+        run: ruff check .
+      - name: Type check
+        run: mypy src/edp_framework
+      - name: Tests
+        run: pytest --cov=edp_framework --cov-report=term-missing

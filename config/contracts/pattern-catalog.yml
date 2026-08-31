@@ -1,0 +1,18 @@
+version: 1
+source_of_truth: data-engineering-cheetsheet
+principle: "classify payload semantics before capture/delivery technology"
+patterns:
+  P01: {semantics: current_state, variant: full_snapshot_current, bronze: current_replica}
+  P02: {semantics: current_state, variant: full_snapshot_history, bronze: snapshot_history}
+  P03: {semantics: current_state, variant: watermark_current, bronze: current_replica}
+  P04: {semantics: current_state, variant: watermark_lookback_current, bronze: current_replica}
+  P05: {semantics: current_state, variant: watermark_lookback_raw, bronze: raw_append}
+  P06: {semantics: current_state, variant: watermark_soft_delete_current, bronze: current_replica}
+  P07: {semantics: current_state, variant: watermark_lookback_soft_delete_raw, bronze: raw_append}
+  P08: {semantics: change_feed, variant: net_changes_current, bronze: current_replica}
+  P09: {semantics: change_feed, variant: net_changes_append, bronze: event_history}
+  P10: {semantics: change_feed, variant: full_changes_event, bronze: event_history}
+  P11: {semantics: change_feed, variant: full_changes_current_lossy, bronze: current_replica}
+  P12: {semantics: business_events, variant: domain_events, bronze: event_history}
+  P13: {semantics: derived_changes, variant: snapshot_diff_current, bronze: current_replica}
+  P14: {semantics: derived_changes, variant: snapshot_diff_append, bronze: event_history}

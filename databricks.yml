@@ -1,0 +1,47 @@
+bundle:
+  name: enterprise-databricks-framework
+
+databricks_cli_version: '>= 1.3.0'
+
+include:
+  - resources/*.yml
+  - resources/**/*.yml
+
+artifacts:
+  framework_wheel:
+    type: whl
+    path: .
+    build: python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+    dynamic_version: true
+
+variables:
+  catalog:
+    description: Environment catalog managed outside workload code.
+
+sync:
+  include:
+    - src/**
+    - config/**
+    - sql/**
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      catalog: edp_dev
+
+  ci:
+    mode: development
+    variables:
+      catalog: edp_ci
+
+  uat:
+    mode: production
+    variables:
+      catalog: edp_uat
+
+  prod:
+    mode: production
+    variables:
+      catalog: edp_prod

@@ -1,0 +1,6 @@
+environment: uat
+workspace_role: release_validation
+catalog: edp_uat
+control_schema: platform_control
+allow_interactive_engineering: false
+requires_release_sha: true
