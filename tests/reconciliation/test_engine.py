@@ -144,7 +144,9 @@ def test_key_pk_and_scd2_measurements_are_supported() -> None:
     report = evaluate_reconciliation(spec, context(), provider)
     assert report.status == "passed"
     assert len(report.results) == 4
-    assert provider.seen_keys == [("order_id",)] * 4
+    # key_count measures source and target separately, then the remaining three rules
+    # each consume the same reconciliation key once.
+    assert provider.seen_keys == [("order_id",)] * 5
 
 
 def test_aggregate_compares_same_reviewed_expression_at_same_cutoff() -> None:
