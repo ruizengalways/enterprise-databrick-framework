@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import uuid4
 
 from edp_framework.metadata.models import ReconciliationRule, TableSpec
@@ -165,6 +166,7 @@ def evaluate_reconciliation(
     )
     fail_results = [result for result in results if not result.passed and result.severity == "fail"]
     warn_results = [result for result in results if not result.passed and result.severity == "warn"]
+    status: Literal["passed", "warning", "failed", "skipped"]
     if fail_results:
         status = "failed"
     elif warn_results:
