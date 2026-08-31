@@ -1,0 +1,35 @@
+schema_version: 1
+kind: repository_contract
+repository: ruizengalways/enterprise-databrick-framework
+role: reusable_framework_package
+purpose: >-
+  Installable reusable data-engineering package implementing semantic validation,
+  runtime registration, quality/reconciliation/recovery primitives, and extension contracts.
+human_entrypoint: README.md
+human_context: docs/PROJECT_CONTEXT.md
+machine_entrypoint: project/repository.yml
+implementation_state: project/capabilities.yml
+owns:
+  - reusable_metadata_contracts
+  - builtin_pattern_validation
+  - builtin_runtime_registration
+  - reusable_quality_primitives
+  - reusable_reconciliation_primitives
+  - reusable_recovery_primitives
+  - extension_package_contracts
+must_not_own:
+  - terraform
+  - workspaces
+  - cloud_networking
+  - organisation_specific_catalog_topology
+  - github_oidc_bootstrap
+  - organisation_specific_environment_names
+  - organisation_specific_promotion_policy
+  - customer_fixtures_and_expected_results
+  - technology_neutral_pattern_semantics
+depends_on:
+  - repository: ruizengalways/data-engineering-cheetsheet
+    relationship: semantic_source_of_truth
+certified_by:
+  repository: ruizengalways/enterprise-databrick-customer
+  contract: certification/framework-lock.yml
