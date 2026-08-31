@@ -10,6 +10,7 @@ from edp_framework.patterns.contracts import (
     PatternProvider,
     RuntimeContext,
 )
+from edp_framework.reconciliation.contracts import validate_reconciliation_contract
 
 
 class PatternRegistry:
@@ -54,6 +55,7 @@ class PatternRegistry:
         definition = self.get(spec.pattern_id)
         if spec.pattern_id.startswith("P") and spec.pattern_id[1:].isdigit():
             validate_builtin_pattern(spec, definition)
+        validate_reconciliation_contract(spec)
         provider = self._provider_by_pattern.get(spec.pattern_id)
         if provider is not None:
             provider.validate(spec)
