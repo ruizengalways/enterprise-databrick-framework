@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import importlib.metadata
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 import edp_framework
 
