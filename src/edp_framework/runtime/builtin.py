@@ -5,8 +5,8 @@ from typing import Any
 
 from edp_framework.metadata.models import (
     BronzeContract,
-    DQAction,
     DeleteStrategy,
+    DQAction,
     SilverContract,
     TableSpec,
 )
@@ -87,8 +87,6 @@ def _sequence_by(spec: TableSpec) -> Any:
         raise ValueError(f"{spec.dataset_id}: authoritative source ordering is required")
     columns = spec.ordering.columns
     if len(columns) == 1:
-        # AUTO CDC accepts a column name directly. Returning a string keeps package tests
-        # importable outside a Databricks/PySpark runtime.
         return columns[0]
 
     from pyspark.sql.functions import col, struct
@@ -263,13 +261,7 @@ def register_p01(spec: TableSpec, context: RuntimeContext) -> None:
 
 
 def register_p02(spec: TableSpec, context: RuntimeContext) -> None:
-    """Register snapshot-derived SCD2 from a workload-owned Bronze snapshot iterator.
-
-    The workload/capture adapter owns discovery and retention of complete snapshots in the
-    declared Bronze contract. It passes a callback through RuntimeContext that returns the
-    next complete snapshot and version. This keeps file/API/database version discovery out
-    of reusable semantic core and avoids forbidden actions such as collect() in dataset definitions.
-    """
+    """Register snapshot-derived SCD2 from a workload-owned Bronze snapshot iterator."""
 
     validate_builtin_runtime_contract(spec)
     snapshot_source = _snapshot_source(spec, context)
@@ -277,7 +269,6 @@ def register_p02(spec: TableSpec, context: RuntimeContext) -> None:
     dp = context.pipelines
 
     dp.create_streaming_table(silver, comment=f"Snapshot-derived SCD2 for {spec.dataset_id}")
-    # Current Lakeflow API does not expose a `name` argument for snapshot AUTO CDC.
     dp.create_auto_cdc_from_snapshot_flow(
         target=silver,
         source=snapshot_source,
