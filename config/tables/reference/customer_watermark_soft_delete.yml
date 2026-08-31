@@ -44,6 +44,7 @@ identity:
   - row_version
   delivery_identity_columns:
   - _ingest_run_id
+  - _ingest_sequence
 bronze:
   contract: raw_append
   table: bronze.crm_customer_observation

@@ -14,6 +14,15 @@ capture:
   options:
     topic: sales.public.customer
     reference_source_relation: reference.fixture_sales_customer_cdc
+    apply_as_deletes: _operation = 'd'
+    runtime_except_columns:
+    - _operation
+    - _kafka_topic
+    - _kafka_partition
+    - _kafka_offset
+    - _ingest_run_id
+    - source_lsn
+    - source_event_sequence
 bootstrap:
   mode: snapshot_at_source_position
   handoff_position: consistent source snapshot at LSN P, followed by CDC strictly after/around P with idempotent overlap

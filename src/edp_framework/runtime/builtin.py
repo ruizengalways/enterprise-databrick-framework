@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from edp_framework.metadata.models import DQAction, TableSpec
+from edp_framework.metadata.models import DQAction, DeleteStrategy, TableSpec
 from edp_framework.patterns.contracts import RuntimeContext
 from edp_framework.runtime.names import qualify_relation, runtime_name
 from edp_framework.runtime.quality import (
@@ -27,6 +27,24 @@ def _source_relation(spec: TableSpec, context: RuntimeContext) -> str:
     return qualify_relation(context.catalog, configured)
 
 
+def _string_option(spec: TableSpec, name: str) -> str | None:
+    value = spec.capture.options.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{spec.dataset_id}: capture.options.{name} must be a non-empty string")
+    return value
+
+
+def _string_list_option(spec: TableSpec, name: str) -> list[str] | None:
+    value = spec.capture.options.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
+        raise ValueError(f"{spec.dataset_id}: capture.options.{name} must be a list of strings")
+    return value
+
+
 def _sequence_by(spec: TableSpec) -> Any:
     if spec.ordering is None:
         raise ValueError(f"{spec.dataset_id}: authoritative ordering is required")
@@ -36,6 +54,36 @@ def _sequence_by(spec: TableSpec) -> Any:
     if len(columns) == 1:
         return col(columns[0])
     return struct(*columns)
+
+
+def validate_builtin_runtime_contract(spec: TableSpec) -> None:
+    """Validate metadata required by implemented built-in runtime handlers without Spark."""
+
+    if spec.pattern_id not in BUILTIN_RUNTIME_HANDLERS:
+        return
+
+    if spec.pattern_id == "P10":
+        if spec.deletes.strategy is DeleteStrategy.CDC_DELETE and _string_option(
+            spec, "apply_as_deletes"
+        ) is None:
+            raise ValueError(
+                f"{spec.dataset_id}: P10 CDC delete semantics require capture.options.apply_as_deletes"
+            )
+        _string_list_option(spec, "runtime_except_columns")
+
+    if spec.pattern_id == "P12":
+        if not spec.silver.effective_time_column:
+            raise ValueError(
+                f"{spec.dataset_id}: P12 canonical events require silver.effective_time_column"
+            )
+        if not spec.identity.event_identity_columns:
+            raise ValueError(
+                f"{spec.dataset_id}: P12 canonical events require identity.event_identity_columns"
+            )
+        if _string_option(spec, "dedup_watermark") is None:
+            raise ValueError(
+                f"{spec.dataset_id}: P12 canonical events require capture.options.dedup_watermark"
+            )
 
 
 def _register_stream_from_relation(
@@ -124,13 +172,14 @@ def register_p07(spec: TableSpec, context: RuntimeContext, source: str) -> None:
         source=valid_source,
         keys=spec.identity.business_keys,
         sequence_by=_sequence_by(spec),
-        except_column_list=["_ingest_run_id", "_ingest_sequence"],
+        except_column_list=spec.identity.delivery_identity_columns or None,
         stored_as_scd_type=1,
         name=runtime_name(spec.dataset_id, "auto_cdc_current"),
     )
 
 
 def register_p10(spec: TableSpec, context: RuntimeContext, source: str) -> None:
+    validate_builtin_runtime_contract(spec)
     dp = context.pipelines
     bronze = qualify_relation(context.catalog, spec.bronze.table)
     silver = qualify_relation(context.catalog, spec.silver.table)
@@ -138,22 +187,17 @@ def register_p10(spec: TableSpec, context: RuntimeContext, source: str) -> None:
     _register_quarantine(spec, context, bronze)
     valid_source = _register_valid_stream_view(spec, context, bronze)
 
+    delete_expression = _string_option(spec, "apply_as_deletes")
+    except_columns = _string_list_option(spec, "runtime_except_columns")
+
     dp.create_streaming_table(silver, comment=f"SCD2 history for {spec.dataset_id}")
     dp.create_auto_cdc_flow(
         target=silver,
         source=valid_source,
         keys=spec.identity.business_keys,
         sequence_by=_sequence_by(spec),
-        apply_as_deletes="_operation = 'd'",
-        except_column_list=[
-            "_operation",
-            "_kafka_topic",
-            "_kafka_partition",
-            "_kafka_offset",
-            "_ingest_run_id",
-            "source_lsn",
-            "source_event_sequence",
-        ],
+        apply_as_deletes=delete_expression,
+        except_column_list=except_columns,
         stored_as_scd_type=2,
         track_history_column_list=spec.silver.tracked_columns or None,
         name=runtime_name(spec.dataset_id, "auto_cdc_scd2"),
@@ -161,6 +205,17 @@ def register_p10(spec: TableSpec, context: RuntimeContext, source: str) -> None:
 
 
 def register_p12(spec: TableSpec, context: RuntimeContext, source: str) -> None:
+    validate_builtin_runtime_contract(spec)
+    event_time = spec.silver.effective_time_column
+    assert event_time is not None
+    event_identity = spec.identity.event_identity_columns
+    watermark = _string_option(spec, "dedup_watermark")
+    assert watermark is not None
+
+    transform = context.options.get("transform")
+    if transform is not None and not callable(transform):
+        raise TypeError(f"{spec.dataset_id}: runtime transform must be callable")
+
     dp = context.pipelines
     spark = context.spark
     bronze = qualify_relation(context.catalog, spec.bronze.table)
@@ -175,11 +230,8 @@ def register_p12(spec: TableSpec, context: RuntimeContext, source: str) -> None:
         frame = spark.readStream.table(bronze)
         if valid:
             frame = frame.filter(valid)
-        return (
-            frame.withWatermark("event_time", "7 days")
-            .dropDuplicatesWithinWatermark(["event_id"])
-            .select("event_id", "order_id", "event_type", "event_time", "payload")
-        )
+        frame = frame.withWatermark(event_time, watermark).dropDuplicatesWithinWatermark(event_identity)
+        return transform(frame) if transform is not None else frame
 
     canonical_events.__name__ = runtime_name(spec.dataset_id, "canonical_events")
     function = decorate_expectations(dp, canonical_events, spec.quality.rules)
@@ -240,5 +292,6 @@ def build_builtin_runtime(spec: TableSpec, context: RuntimeContext) -> None:
         raise NotImplementedError(
             f"built-in pattern {spec.pattern_id} is semantically registered but its Databricks runtime handler is not implemented yet"
         ) from exc
+    validate_builtin_runtime_contract(spec)
     source = _source_relation(spec, context)
     handler(spec, context, source)
