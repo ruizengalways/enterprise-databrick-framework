@@ -12,11 +12,11 @@ from edp_framework.reconciliation import (
 
 
 class FakeWriter:
-    def __init__(self, spark: "FakeSpark") -> None:
+    def __init__(self, spark: FakeSpark) -> None:
         self.spark = spark
         self.mode_name: str | None = None
 
-    def mode(self, value: str) -> "FakeWriter":
+    def mode(self, value: str) -> FakeWriter:
         self.mode_name = value
         return self
 
@@ -25,7 +25,7 @@ class FakeWriter:
 
 
 class FakeFrame:
-    def __init__(self, spark: "FakeSpark") -> None:
+    def __init__(self, spark: FakeSpark) -> None:
         self.write = FakeWriter(spark)
 
 
