@@ -1,6 +1,0 @@
-environment: ci
-workspace_role: ephemeral_validation
-catalog: edp_ci
-control_schema: platform_control
-namespace_template: pr_${PR_NUMBER}
-auto_destroy: true

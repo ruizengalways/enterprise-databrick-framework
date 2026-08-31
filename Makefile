@@ -1,10 +1,10 @@
-.PHONY: install validate lint typecheck test ci bundle-validate
+.PHONY: install validate lint typecheck test build ci
 
 install:
 	python -m pip install -e '.[dev]'
 
 validate:
-	edp validate config/tables
+	edp validate examples/table_specs
 
 lint:
 	ruff check .
@@ -15,7 +15,7 @@ typecheck:
 test:
 	pytest
 
-ci: validate lint typecheck test
+build:
+	python -m pip wheel . --no-deps --wheel-dir dist
 
-bundle-validate:
-	databricks bundle validate -t $${TARGET:-dev}
+ci: validate lint typecheck test build

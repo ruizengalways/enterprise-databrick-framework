@@ -1,51 +1,88 @@
 # Enterprise Databricks Framework
 
-A production-oriented, metadata-driven Databricks lakehouse framework for onboarding heterogeneous enterprise data sources without rewriting the platform for every table.
+An installable, production-oriented Python framework for metadata-driven Databricks data engineering.
 
-## Design goal
+This repository is intentionally **package-only**. It owns reusable pipeline semantics and runtime behavior; it does not own a company's Databricks workspaces, Unity Catalog topology, Terraform state, GitHub OIDC identities, Bundle environment targets or DEV/UAT/PROD platform deployment.
 
-The framework turns a pipeline design contract into the appropriate Databricks implementation while keeping business transformations explicit. It supports current-state snapshots, watermark incrementals, raw append observation history, soft deletes, net/full CDC, Debezium/Kafka, Delta CDF, business events, snapshot-diff patterns, SCD1/SCD2, reconciliation, replay, repair, quarantine, schema evolution and immutable CI/CD promotion.
+Platform/IaC examples live separately in [`enterprise-databrick-infra`](https://github.com/ruizengalways/enterprise-databrick-infra).
 
-The core reasoning model is:
+## What you take to a new company
+
+If the company already has Databricks infrastructure, you only need this package plus the company's own workload repository:
+
+```text
+company-data-repo
+├── metadata / dataset contracts
+├── source adapters / domain transforms
+├── Databricks Jobs or Lakeflow Pipelines
+└── dependency: enterprise-databricks-framework
+
+existing company platform
+├── workspaces
+├── catalogs / schemas
+├── identities / secrets
+└── CI/CD deployment standards
+```
+
+No Terraform from this repository is required because there is no Terraform in this repository.
+
+## Package responsibilities
+
+The framework provides reusable contracts and runtime components for:
+
+- full snapshots and snapshot history
+- watermark incrementals and lookback
+- raw append observation history
+- soft-delete current-state materialisation
+- net/full CDC and Debezium-style change feeds
+- event streams
+- SCD1 / SCD2
+- bootstrap/handoff contracts
+- identity, source ordering and idempotency contracts
+- schema evolution policy
+- DQ/quarantine semantics
+- reconciliation and recovery contracts
+- runtime control tables and release evidence
+- extension packages via `edp.patterns`
+
+The mental model is:
 
 ```text
 data semantics
   -> capture / delivery
-  -> cursor / ordering
+  -> cursor / authoritative ordering
+  -> identity / idempotency
   -> Bronze contract
   -> Silver contract
-  -> fidelity / recovery
+  -> delete / fidelity / retention
+  -> reconciliation / recovery
 ```
 
-## Repository rule
-
-This repository is intentionally a **modular monorepo**. Reusable framework code lives in `src/edp_framework`; source- or company-specific behavior is added through package extension points. Do not split the core into a separate repository until multiple independently released Databricks platforms genuinely need to consume it.
-
-## Directory map
+## Repository map
 
 ```text
 enterprise-databrick-framework/
-├── docs/                 Architecture, ADRs, onboarding, runbooks and repo map
-├── config/               Desired-state metadata and data contracts (Git-owned)
-├── src/edp_framework/    Reusable Python package and extension points
-├── resources/            Lakeflow Jobs/Pipelines bundle resource definitions
-├── sql/                  Runtime control, observability and governance SQL
-├── tests/                Contract, metadata, recovery and reconciliation tests
-├── fixtures/             Deterministic test data
-├── platform/terraform/   Account/workspace/UC infrastructure boundary
-├── scripts/              CI, deployment and operational wrappers
-└── .github/workflows/    CI/CD entry points
+├── src/edp_framework/     reusable installable package
+├── tests/                 package/contract/recovery tests
+├── examples/              example metadata contracts, never environment config
+├── templates/             extension-package template
+├── docs/                  framework architecture and runbooks
+├── sql/                   reusable runtime-control documentation/assets
+├── scripts/ci/            package CI helpers
+├── pyproject.toml
+└── .github/workflows/     package validation/build only
 ```
 
-For the fastest navigation, start with [`docs/REPOSITORY_MAP.md`](docs/REPOSITORY_MAP.md).
+Explicitly absent:
 
-## Configuration vs runtime state
-
-**Git is the desired-state source of truth.** Table keys, semantics, cursor, DQ, SCD and recovery strategy belong under `config/`.
-
-**Unity Catalog Delta tables store runtime state.** Runs, observed source positions, reconciliation outcomes, repair requests and incidents belong in `platform_control`.
-
-A production operator must not be able to silently change a table from `SCD2` to `snapshot_replace` by editing a control table.
+```text
+terraform/
+platform/
+databricks.yml
+resources/
+config/environments/
+DEV/UAT/PROD deployment workflows
+```
 
 ## Quick start
 
@@ -54,34 +91,28 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 
-edp validate config/tables
+edp validate examples/table_specs
 pytest
 ruff check .
 mypy src/edp_framework
+python -m pip wheel . --no-deps --wheel-dir dist
 ```
 
-When Databricks credentials and targets are configured:
-
-```bash
-databricks bundle validate -t dev
-databricks bundle deploy -t dev
-```
-
-## Built-in pattern catalogue
-
-The framework ships with the 14 semantic patterns represented in the companion data-engineering cheatsheet. See `config/contracts/pattern-catalog.yml` and `docs/architecture/pattern-routing.md`.
+In a consuming project, pin the framework like any other internal library: a released wheel/version is preferred over copying framework source into every project.
 
 ## Extension model
 
-New source technologies or pipeline patterns should normally be delivered as packages, not as edits scattered across the framework. A package can register new pattern providers using the Python entry-point group `edp.patterns`.
+A source technology that fits an existing semantic pattern should normally add only a source adapter/provider package. A genuinely new semantic pattern can register a provider through the Python entry-point group `edp.patterns`.
 
 ```toml
 [project.entry-points."edp.patterns"]
 company_sap = "company_sap_patterns.provider:provider"
 ```
 
-The package can then provide metadata validation, routing hints, runtime factories and tests while leaving the core stable.
+Extensions own their semantic declaration, metadata validation, runtime construction and tests. Core should not become a vendor switch statement.
 
-## Status
+## Infrastructure boundary
 
-Phase 0 foundation is implemented: project blueprint, architecture boundaries, metadata schema, built-in semantic catalogue, plugin contract, runtime control DDL, validation CLI and CI skeleton. Databricks workspace resources and real vertical slices are intentionally subsequent phases; see `docs/PROJECT_BLUEPRINT.md`.
+The framework may require capabilities such as a writable catalog/schema or a runtime service principal, but it accepts them as **runtime/environment inputs**. It never provisions them.
+
+See `docs/INTEGRATION_WITH_PLATFORM.md` and the companion infra repository for an optional reusable platform baseline.

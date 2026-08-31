@@ -1,14 +1,7 @@
 # ADR-001: Repository Boundary
 
-Status: Accepted
+Status: Superseded by ADR-010
 
-## Decision
+The original decision kept framework code and platform deployment concerns in one modular repository. That was useful during the initial architecture spike but is no longer the desired product boundary.
 
-Create one new repository, `enterprise-databrick-framework`. Keep the reusable core as the installable package `src/edp_framework`. Do not create a separate core repository yet.
-
-## Consequences
-
-- clone/copy is self-contained for a new organisation
-- code, metadata, tests and deployment definitions version together
-- no cross-repo dependency drift
-- extraction remains easy because the core already has a package boundary
+See ADR-010 for the package/infra split.

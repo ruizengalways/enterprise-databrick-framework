@@ -1,38 +1,23 @@
-# Repository Map — Where to Change What
+# Repository map
 
-This document is the shortest route into the repository. If a contributor cannot decide where a change belongs from this page, the repository boundary needs improvement.
+This repository is an installable reusable library, not a Databricks platform deployment repository.
 
-| I need to... | Start here | Rule |
-|---|---|---|
-| Onboard a source/table using an existing pattern | `config/tables/` | Configuration first; do not fork framework code. |
-| Describe source ownership/connection conventions | `config/sources/` | Keep credentials outside Git. |
-| Understand the P01-P14 semantic catalogue | `config/contracts/pattern-catalog.yml` + `docs/architecture/pattern-routing.md` | Classify semantics before choosing technology. |
-| Add a genuinely new semantic/vendor pattern | `templates/pattern-extension/` | Extend through a package/entry point that ships definition + validation + executable runtime; do not add scattered `if vendor == ...`. |
-| Change reusable metadata validation | `src/edp_framework/metadata/` | Changes require unit tests and backward-compatibility review. |
-| Change pattern registration/routing | `src/edp_framework/patterns/` | Built-ins remain stable; company-specific patterns belong in extension packages. |
-| Change runtime operational-control tables | `src/edp_framework/operations/` | Runtime state is not desired-state configuration. |
-| Add a Databricks Job/Pipeline resource | `resources/` | Workload resources are Bundle-owned. |
-| Change account/workspace/Unity Catalog foundation | `platform/terraform/` | Stable platform infrastructure is Terraform-owned. |
-| Change CI validation | `.github/workflows/validate.yml` | PR validation never deploys PROD. |
-| Promote an immutable release | `.github/workflows/promote.yml` | Deploy the requested Git SHA, not whatever `main` currently contains. |
-| Diagnose/repair bad data | `docs/runbooks/` + `platform_control` runtime records | Repair the highest trustworthy layer and regenerate derived layers normally. |
-| Understand what is truly implemented | `docs/CAPABILITY_MATRIX.md` | Do not infer runtime readiness from directory names. |
-| Understand the full platform contract | `docs/PROJECT_BLUEPRINT.md` | Canonical architecture source of truth. |
+## Where to change things
 
-## Repository ownership mental model
+| Goal | Location |
+|---|---|
+| Change metadata schema/contracts | `src/edp_framework/metadata/` |
+| Add or change built-in semantic pattern behavior | `src/edp_framework/patterns/` and runtime modules |
+| Add framework operational/recovery behavior | `src/edp_framework/operations/` |
+| Add deterministic package tests | `tests/` |
+| Show how a dataset contract looks | `examples/table_specs/` |
+| Build a company/vendor extension | `templates/pattern-extension/` |
+| Understand recovery/reconciliation semantics | `docs/runbooks/` and architecture docs |
+| Provision Unity Catalog/workspaces/OIDC | **not here**; use the company platform or `enterprise-databrick-infra` |
+| Define DEV/UAT/PROD Bundle targets | consuming workload/platform repo |
 
-```text
-Git desired state
-├── config/                  dataset contracts and behavior
-├── src/edp_framework/       reusable product code
-├── resources/               Databricks workload definitions
-├── platform/terraform/      stable platform infrastructure
-└── .github/                 delivery policy
+## Rule of thumb
 
-Databricks runtime state
-└── <env>.platform_control   runs, positions, DQ, reconciliation, repairs, incidents
-```
+If a change needs a workspace ID, cloud subscription/account, storage credential, Terraform backend, GitHub Environment, service-principal application ID, catalog name such as `edp_prod`, or organisation-specific approval gate, it does not belong in this package repository.
 
-## Copy-to-a-new-company rule
-
-Clone the repository as a whole. Change environment/company configuration and add source-specific extension packages only where a source contract genuinely needs behavior not represented by the built-in catalogue. Do not copy individual notebooks out of the framework; doing so destroys upgradeability, tests, and recovery semantics.
+If the same Python behavior should work in ten different Databricks estates when given the appropriate Spark/Lakeflow/runtime context, it belongs here.
