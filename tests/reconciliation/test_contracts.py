@@ -40,8 +40,31 @@ def test_aggregate_rule_requires_expression_before_runtime() -> None:
     spec = spec.model_copy(
         update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
     )
-    with pytest.raises(ValueError, match="requires options.expression"):
+    with pytest.raises(ValueError, match="options.expression"):
         validate(spec)
+
+
+def test_operation_count_rule_requires_explicit_operation_column() -> None:
+    spec = load_table_spec(ROOT / "examples/table_specs/order_events.yml")
+    rule = ReconciliationRule(name="operations", kind="operation_count")
+    spec = spec.model_copy(
+        update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
+    )
+    with pytest.raises(ValueError, match="options.operation_column"):
+        validate(spec)
+
+
+def test_operation_count_rule_validates_with_normalized_operation_column() -> None:
+    spec = load_table_spec(ROOT / "examples/table_specs/order_events.yml")
+    rule = ReconciliationRule(
+        name="operations",
+        kind="operation_count",
+        options={"operation_column": "_operation"},
+    )
+    spec = spec.model_copy(
+        update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
+    )
+    validate(spec)
 
 
 def test_invalid_tolerance_mode_fails_before_runtime() -> None:
@@ -56,12 +79,3 @@ def test_invalid_tolerance_mode_fails_before_runtime() -> None:
     )
     with pytest.raises(ValueError, match="unsupported tolerance_mode"):
         validate(spec)
-
-
-def test_declared_operation_count_remains_valid_for_external_runner() -> None:
-    spec = load_table_spec(ROOT / "examples/table_specs/order_events.yml")
-    rule = ReconciliationRule(name="operations", kind="operation_count")
-    spec = spec.model_copy(
-        update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
-    )
-    validate(spec)

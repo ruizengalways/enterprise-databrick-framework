@@ -39,23 +39,25 @@ quality:
   fail_expectations: implemented
   quarantine_split: implemented_for_streaming_verticals
 reconciliation:
-  reusable_execution_engine: implemented_v2
+  reusable_execution_engine: implemented_v3
   cutoff_consistency_required: true
+  comparable_stage_consistency_required: true
   spark_measure_provider: implemented
   control_table_audit_persistence: implemented
   rule_specific_comparison_keys: implemented
   executable_contract_validation: implemented
+  operation_category_interpretation_owner: consuming_workload
   supported_rule_kinds:
     - row_count
     - key_count
     - pk_presence
     - aggregate
     - source_position
+    - operation_count
     - scd2_current_uniqueness
     - scd2_no_overlap
   declared_but_not_yet_implemented_rule_kinds:
     - hash
-    - operation_count
     - custom
 recovery:
   repair_executor: not_released
@@ -66,3 +68,4 @@ rules:
   runtime_handler_release_does_not_imply_c3_certification: true
   unsupported_reconciliation_rule_must_fail_explicitly: true
   reconciliation_key_is_not_necessarily_business_identity: true
+  operation_count_does_not_infer_source_or_target_operation_semantics: true

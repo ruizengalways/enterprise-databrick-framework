@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
@@ -19,10 +20,22 @@ SUPPORTED_RULE_KINDS = frozenset(
         "pk_presence",
         "aggregate",
         "source_position",
+        "operation_count",
         "scd2_current_uniqueness",
         "scd2_no_overlap",
     }
 )
+
+
+def _compared_variance(rule: ReconciliationRule, variance: float, expected_scale: float) -> float:
+    tolerance_mode = str(rule.options.get("tolerance_mode", "absolute"))
+    if tolerance_mode == "absolute":
+        return variance
+    if tolerance_mode == "relative":
+        return variance / max(expected_scale, 1.0)
+    raise ValueError(
+        f"reconciliation rule {rule.name}: unsupported tolerance_mode {tolerance_mode!r}"
+    )
 
 
 def _numeric_result(
@@ -32,15 +45,7 @@ def _numeric_result(
     actual: float | int,
 ) -> ReconciliationResult:
     variance = float(abs(actual - expected))
-    tolerance_mode = str(rule.options.get("tolerance_mode", "absolute"))
-    if tolerance_mode == "absolute":
-        compared_variance = variance
-    elif tolerance_mode == "relative":
-        compared_variance = variance / max(float(abs(expected)), 1.0)
-    else:
-        raise ValueError(
-            f"reconciliation rule {rule.name}: unsupported tolerance_mode {tolerance_mode!r}"
-        )
+    compared_variance = _compared_variance(rule, variance, float(abs(expected)))
 
     return ReconciliationResult(
         rule_name=rule.name,
@@ -52,8 +57,42 @@ def _numeric_result(
         passed=compared_variance <= rule.tolerance,
         details={
             "tolerance": str(rule.tolerance),
-            "tolerance_mode": tolerance_mode,
+            "tolerance_mode": str(rule.options.get("tolerance_mode", "absolute")),
             "compared_variance": str(compared_variance),
+        },
+    )
+
+
+def _categorical_result(
+    rule: ReconciliationRule,
+    *,
+    expected: dict[str, int],
+    actual: dict[str, int],
+) -> ReconciliationResult:
+    categories = sorted(set(expected) | set(actual))
+    category_variance = {
+        category: actual.get(category, 0) - expected.get(category, 0) for category in categories
+    }
+    variance = float(sum(abs(value) for value in category_variance.values()))
+    compared_variance = _compared_variance(rule, variance, float(sum(expected.values())))
+
+    return ReconciliationResult(
+        rule_name=rule.name,
+        rule_kind=rule.kind,
+        expected_value=json.dumps(expected, sort_keys=True, separators=(",", ":")),
+        actual_value=json.dumps(actual, sort_keys=True, separators=(",", ":")),
+        variance=variance,
+        severity=rule.severity,
+        passed=compared_variance <= rule.tolerance,
+        details={
+            "tolerance": str(rule.tolerance),
+            "tolerance_mode": str(rule.options.get("tolerance_mode", "absolute")),
+            "compared_variance": str(compared_variance),
+            "category_variance": json.dumps(
+                category_variance,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
         },
     )
 
@@ -95,6 +134,16 @@ def _required_expression(spec: TableSpec, rule: ReconciliationRule) -> str:
     return expression
 
 
+def _required_operation_column(spec: TableSpec, rule: ReconciliationRule) -> str:
+    value = rule.options.get("operation_column")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            f"{spec.dataset_id}: operation_count reconciliation rule {rule.name} requires "
+            "options.operation_column"
+        )
+    return value
+
+
 def _evaluate_rule(
     spec: TableSpec,
     context: ReconciliationContext,
@@ -104,7 +153,7 @@ def _evaluate_rule(
     if rule.kind not in SUPPORTED_RULE_KINDS:
         raise NotImplementedError(
             f"reconciliation rule kind {rule.kind!r} is declared in metadata but is not "
-            "implemented by the reusable v2 engine; use an extension/runner rather than "
+            "implemented by the reusable engine; use an extension/runner rather than "
             "silently treating it as passed"
         )
 
@@ -141,6 +190,14 @@ def _evaluate_rule(
             rule,
             expected=provider.numeric_scalar(context.source_relation, expression),
             actual=provider.numeric_scalar(context.target_relation, expression),
+        )
+
+    if rule.kind == "operation_count":
+        operation_column = _required_operation_column(spec, rule)
+        return _categorical_result(
+            rule,
+            expected=provider.categorical_counts(context.source_relation, operation_column),
+            actual=provider.categorical_counts(context.target_relation, operation_column),
         )
 
     if rule.kind == "scd2_current_uniqueness":
@@ -195,7 +252,9 @@ def evaluate_reconciliation(
     """Evaluate enabled metadata rules against relations aligned to one explicit cutoff.
 
     The framework deliberately does not discover or advance source positions here. The consuming
-    workload must first materialize/resolve source and target views representing the same cutoff.
+    workload must first materialize/resolve source and target views representing the same cutoff and
+    processing stage. For operation_count this means both relations must expose the same normalized
+    operation categories; the framework does not infer provider operation semantics or SCD changes.
     """
 
     started = datetime.now(timezone.utc)

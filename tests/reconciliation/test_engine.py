@@ -16,11 +16,16 @@ class FakeProvider:
         self.rows = {"source.orders": 4, "silver.orders": 4}
         self.keys = {"source.orders": 3, "silver.orders": 3}
         self.scalars = {"source.orders": 2.0, "silver.orders": 2.0}
+        self.categories = {
+            "source.orders": {"c": 1, "u": 2, "d": 1},
+            "silver.orders": {"c": 1, "u": 2, "d": 1},
+        }
         self.missing = 0
         self.duplicates = 0
         self.overlaps = 0
         self.seen_keys: list[tuple[str, ...]] = []
         self.seen_expression: str | None = None
+        self.seen_category_column: str | None = None
 
     def row_count(self, relation: str) -> int:
         return self.rows[relation]
@@ -42,6 +47,10 @@ class FakeProvider:
     def numeric_scalar(self, relation: str, expression: str) -> float:
         self.seen_expression = expression
         return self.scalars[relation]
+
+    def categorical_counts(self, relation: str, column: str) -> dict[str, int]:
+        self.seen_category_column = column
+        return self.categories[relation]
 
     def current_duplicate_key_count(
         self,
@@ -68,7 +77,11 @@ class FakeProvider:
         return self.overlaps
 
 
-def context(*, position: str | None = "42", business_keys: tuple[str, ...] = ("order_id",)) -> ReconciliationContext:
+def context(
+    *,
+    position: str | None = "42",
+    business_keys: tuple[str, ...] = ("order_id",),
+) -> ReconciliationContext:
     return ReconciliationContext(
         cutoff_type="source_position",
         cutoff_value="42",
@@ -144,8 +157,6 @@ def test_key_pk_and_scd2_measurements_are_supported() -> None:
     report = evaluate_reconciliation(spec, context(), provider)
     assert report.status == "passed"
     assert len(report.results) == 4
-    # key_count measures source and target separately, then the remaining three rules
-    # each consume the same reconciliation key once.
     assert provider.seen_keys == [("order_id",)] * 5
 
 
@@ -163,6 +174,45 @@ def test_aggregate_compares_same_reviewed_expression_at_same_cutoff() -> None:
     report = evaluate_reconciliation(spec, context(), provider)
     assert report.status == "passed"
     assert provider.seen_expression == "sum(case when is_deleted then 1 else 0 end)"
+
+
+def test_operation_count_compares_normalized_category_distribution() -> None:
+    spec = p12_spec()
+    rule = ReconciliationRule(
+        name="operations",
+        kind="operation_count",
+        options={"operation_column": "_operation"},
+    )
+    spec = spec.model_copy(
+        update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
+    )
+    provider = FakeProvider()
+    report = evaluate_reconciliation(spec, context(), provider)
+    result = report.results[0]
+    assert report.status == "passed"
+    assert provider.seen_category_column == "_operation"
+    assert result.expected_value == '{"c":1,"d":1,"u":2}'
+    assert result.actual_value == '{"c":1,"d":1,"u":2}'
+    assert result.variance == 0.0
+
+
+def test_operation_count_reports_per_category_drift() -> None:
+    spec = p12_spec()
+    rule = ReconciliationRule(
+        name="operations",
+        kind="operation_count",
+        options={"operation_column": "_operation"},
+    )
+    spec = spec.model_copy(
+        update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
+    )
+    provider = FakeProvider()
+    provider.categories["silver.orders"] = {"c": 1, "u": 1, "d": 2}
+    report = evaluate_reconciliation(spec, context(), provider)
+    result = report.results[0]
+    assert report.status == "failed"
+    assert result.variance == 2.0
+    assert result.details["category_variance"] == '{"c":0,"d":1,"u":-1}'
 
 
 def test_rule_specific_keys_do_not_require_business_identity() -> None:
@@ -186,9 +236,9 @@ def test_scd2_overlap_violation_fails_report() -> None:
     assert report.results[0].actual_value == "1"
 
 
-def test_unimplemented_rule_fails_explicitly_instead_of_false_pass() -> None:
+def test_unimplemented_hash_rule_fails_explicitly_instead_of_false_pass() -> None:
     spec = p12_spec()
-    rule = ReconciliationRule(name="operations", kind="operation_count")
+    rule = ReconciliationRule(name="hash", kind="hash")
     spec = spec.model_copy(
         update={"reconciliation": spec.reconciliation.model_copy(update={"rules": [rule]})}
     )
